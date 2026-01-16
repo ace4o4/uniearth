@@ -1,20 +1,28 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ZoomIn, ZoomOut, Layers, Crosshair, Maximize, Split, Eye } from "lucide-react";
+import { ZoomIn, ZoomOut, Layers, Crosshair, Maximize, Split, Eye, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Map from "ol/Map";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
-import OSM from "ol/source/OSM";
 import XYZ from "ol/source/XYZ";
-import { fromLonLat } from "ol/proj";
+import { fromLonLat, toLonLat } from "ol/proj";
+import type { MapBrowserEvent } from "ol";
 import "ol/ol.css";
+import { BandComposite } from "./CompositeSelector";
+
+interface PixelLocation {
+  lat: number;
+  lon: number;
+}
 
 interface MapCanvasProps {
   className?: string;
+  selectedComposite?: BandComposite;
+  onPixelClick?: (location: PixelLocation) => void;
 }
 
-export function MapCanvas({ className }: MapCanvasProps) {
+export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCanvasProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<Map | null>(null);
   const [coordinates, setCoordinates] = useState({ lat: 20.5937, lon: 78.9629 });
@@ -22,6 +30,8 @@ export function MapCanvas({ className }: MapCanvasProps) {
   const [activeLayer, setActiveLayer] = useState<'satellite' | 'terrain' | 'dark'>('satellite');
   const [splitView, setSplitView] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [clickedLocation, setClickedLocation] = useState<PixelLocation | null>(null);
+  const [isFetchingData, setIsFetchingData] = useState(false);
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
@@ -50,13 +60,30 @@ export function MapCanvas({ className }: MapCanvasProps) {
       const view = map.getView();
       const center = view.getCenter();
       if (center) {
-        const [lon, lat] = center;
+        const lonLat = toLonLat(center);
         setCoordinates({ 
-          lat: parseFloat((lat / 111319.9).toFixed(4)), 
-          lon: parseFloat((lon / 111319.9).toFixed(4)) 
+          lat: parseFloat(lonLat[1].toFixed(4)), 
+          lon: parseFloat(lonLat[0].toFixed(4)) 
         });
       }
       setZoom(Math.round(view.getZoom() || 5));
+    });
+
+    // Handle map clicks for pixel inspection
+    map.on('click', (event) => {
+      const lonLat = toLonLat(event.coordinate);
+      const location = {
+        lat: parseFloat(lonLat[1].toFixed(6)),
+        lon: parseFloat(lonLat[0].toFixed(6)),
+      };
+      setClickedLocation(location);
+      setIsFetchingData(true);
+      
+      // Simulate fetching pixel data
+      setTimeout(() => {
+        setIsFetchingData(false);
+        onPixelClick?.(location);
+      }, 500);
     });
 
     map.once('rendercomplete', () => {
@@ -69,7 +96,7 @@ export function MapCanvas({ className }: MapCanvasProps) {
       map.setTarget(undefined);
       mapInstance.current = null;
     };
-  }, []);
+  }, [onPixelClick]);
 
   const handleZoom = (direction: 'in' | 'out') => {
     if (!mapInstance.current) return;
@@ -109,7 +136,10 @@ export function MapCanvas({ className }: MapCanvasProps) {
       </AnimatePresence>
 
       {/* Map container */}
-      <div ref={mapRef} className="w-full h-full min-h-[500px]" />
+      <div 
+        ref={mapRef} 
+        className="w-full h-full min-h-[500px] cursor-crosshair" 
+      />
 
       {/* Split view overlay */}
       {splitView && (
@@ -118,6 +148,20 @@ export function MapCanvas({ className }: MapCanvasProps) {
             <Split className="w-4 h-4 text-primary-foreground" />
           </div>
         </div>
+      )}
+
+      {/* Clicked location marker overlay */}
+      {clickedLocation && (
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30"
+        >
+          <div className="relative">
+            <div className="w-6 h-6 rounded-full border-2 border-primary bg-primary/20 animate-pulse" />
+            <div className="absolute inset-0 w-6 h-6 rounded-full border border-primary/50 animate-ping" />
+          </div>
+        </motion.div>
       )}
 
       {/* Coordinates display */}
@@ -136,6 +180,15 @@ export function MapCanvas({ className }: MapCanvasProps) {
               <span className="text-muted-foreground">ZOOM: </span>
               <span className="text-primary">{zoom}</span>
             </div>
+            {selectedComposite && (
+              <>
+                <div className="w-px h-4 bg-border" />
+                <div>
+                  <span className="text-muted-foreground">MODE: </span>
+                  <span className="text-primary">{selectedComposite.name}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -218,10 +271,21 @@ export function MapCanvas({ className }: MapCanvasProps) {
       <div className="absolute bottom-4 left-4 z-10">
         <div className="bg-card/90 backdrop-blur-sm rounded-lg px-4 py-2 border border-border">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-            <span className="text-xs font-mono text-muted-foreground">
-              FUSION ENGINE: <span className="text-success">READY</span>
-            </span>
+            {isFetchingData ? (
+              <>
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                <span className="text-xs font-mono text-muted-foreground">
+                  FETCHING PIXEL DATA...
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                <span className="text-xs font-mono text-muted-foreground">
+                  FUSION ENGINE: <span className="text-success">READY</span>
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>
