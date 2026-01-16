@@ -20,22 +20,22 @@ graph TD
     classDef backend fill:#C8E6C9,stroke:#2E7D32,stroke-width:2px,color:black
     classDef external fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px,stroke-dasharray: 5 5,color:black
 
-    User([Analyst]):::user
+    User(["Analyst"]):::user
     
-    subgraph Frontend [React Dashboard]
-        UI[UI Controls]:::frontend
-        Map[Map Canvas]:::frontend
+    subgraph Frontend ["React Dashboard"]
+        UI["UI Controls"]:::frontend
+        Map["Map Canvas"]:::frontend
     end
 
-    subgraph Backend [Uniearth Engine]
-        API[FastAPI Gateway]:::backend
-        Fusion[Fusion Core <br/>(Gap-Fill / Pan-Sharp)]:::backend
-        Tiler[TiTiler Server]:::backend
+    subgraph Backend ["Uniearth Engine"]
+        API["FastAPI Gateway"]:::backend
+        Fusion["Fusion Core <br/>(Gap-Fill / Pan-Sharp)"]:::backend
+        Tiler["TiTiler Server"]:::backend
     end
 
-    subgraph External [Data Sources]
-        MS[Microsoft Planetary Computer]:::external
-        ISRO[ISRO Bhoonidhi]:::external
+    subgraph External ["Data Sources"]
+        MS["Microsoft Planetary Computer"]:::external
+        ISRO["ISRO Bhoonidhi"]:::external
     end
 
     User --> UI
