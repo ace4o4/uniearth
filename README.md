@@ -8,46 +8,7 @@
 
 ---
 
-## 🏗️ System Architecture
 
-The platform follows a modern microservices architecture, separating data ingestion, processing, and visualization.
-
-```mermaid
-graph TD
-    %% -- Styling --
-    classDef user fill:#FFD740,stroke:#FF6D00,stroke-width:2px,color:black
-    classDef frontend fill:#B3E5FC,stroke:#0277BD,stroke-width:2px,color:black
-    classDef backend fill:#C8E6C9,stroke:#2E7D32,stroke-width:2px,color:black
-    classDef external fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px,stroke-dasharray: 5 5,color:black
-
-    User(["Analyst"]):::user
-    
-    subgraph Frontend ["React Dashboard"]
-        UI["UI Controls"]:::frontend
-        Map["Map Canvas"]:::frontend
-    end
-
-    subgraph Backend ["Uniearth Engine"]
-        API["FastAPI Gateway"]:::backend
-        Fusion["Fusion Core <br/>(Gap-Fill / Pan-Sharp)"]:::backend
-        Tiler["TiTiler Server"]:::backend
-    end
-
-    subgraph External ["Data Sources"]
-        MS["Microsoft Planetary Computer"]:::external
-        ISRO["ISRO Bhoonidhi"]:::external
-    end
-
-    User --> UI
-    UI --> API
-    API --> MS & ISRO
-    MS & ISRO --> Fusion
-    Fusion --> Tiler
-    Tiler --> Map
-    Map --> User
-```
-
----
 
 ## 🚀 Key Features
 
