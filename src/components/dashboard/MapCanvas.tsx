@@ -32,6 +32,23 @@ export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCan
   const [isLoading, setIsLoading] = useState(true);
   const [clickedLocation, setClickedLocation] = useState<PixelLocation | null>(null);
   const [isFetchingData, setIsFetchingData] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected'>('disconnected');
+
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/health');
+        if (res.ok) setBackendStatus('connected');
+        else setBackendStatus('disconnected');
+      } catch (e) {
+        setBackendStatus('disconnected');
+      }
+    };
+
+    checkBackend();
+    const interval = setInterval(checkBackend, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
@@ -61,9 +78,9 @@ export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCan
       const center = view.getCenter();
       if (center) {
         const lonLat = toLonLat(center);
-        setCoordinates({ 
-          lat: parseFloat(lonLat[1].toFixed(4)), 
-          lon: parseFloat(lonLat[0].toFixed(4)) 
+        setCoordinates({
+          lat: parseFloat(lonLat[1].toFixed(4)),
+          lon: parseFloat(lonLat[0].toFixed(4))
         });
       }
       setZoom(Math.round(view.getZoom() || 5));
@@ -78,7 +95,7 @@ export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCan
       };
       setClickedLocation(location);
       setIsFetchingData(true);
-      
+
       // Simulate fetching pixel data
       setTimeout(() => {
         setIsFetchingData(false);
@@ -136,9 +153,9 @@ export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCan
       </AnimatePresence>
 
       {/* Map container */}
-      <div 
-        ref={mapRef} 
-        className="w-full h-full min-h-[500px] cursor-crosshair" 
+      <div
+        ref={mapRef}
+        className="w-full h-full min-h-[500px] cursor-crosshair"
       />
 
       {/* Split view overlay */}
@@ -226,8 +243,8 @@ export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCan
           onClick={() => setSplitView(!splitView)}
           className={cn(
             "w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border flex items-center justify-center transition-colors",
-            splitView 
-              ? "border-primary text-primary" 
+            splitView
+              ? "border-primary text-primary"
               : "border-border text-muted-foreground hover:text-primary hover:border-primary/50"
           )}
         >
@@ -280,9 +297,11 @@ export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCan
               </>
             ) : (
               <>
-                <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                <div className={`w-2 h-2 rounded-full animate-pulse ${backendStatus === 'connected' ? 'bg-success' : 'bg-destructive'}`} />
                 <span className="text-xs font-mono text-muted-foreground">
-                  FUSION ENGINE: <span className="text-success">READY</span>
+                  FUSION ENGINE: <span className={backendStatus === 'connected' ? 'text-success' : 'text-destructive'}>
+                    {backendStatus === 'connected' ? 'ONLINE' : 'OFFLINE'}
+                  </span>
                 </span>
               </>
             )}
