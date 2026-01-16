@@ -1,61 +1,132 @@
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+# Uniearth: Multi-Satellite Data Fusion Platform
 
-Changes made via Lovable will be committed automatically to this repo.
+![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Status](https://img.shields.io/badge/status-Prototype-orange.svg)
 
-**Use your preferred IDE**
+**Uniearth**  is a next-generation geospatial analysis platform designed to fuse multi-source satellite data into a unified, cloud-free, and analysis-ready stream. It solves the critical problem of data fragmentation by integrating optical data from **Sentinel-2 (ESA)**, **Landsat-8/9 (NASA)**, and **Resourcesat-2 (ISRO)** into a single, cohesive dashboard.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🏗️ System Architecture
 
-Follow these steps:
+The platform follows a modern microservices architecture, separating data ingestion, processing, and visualization.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+```mermaid
+graph TD
+    %% -- Styling --
+    classDef user fill:#FFD740,stroke:#FF6D00,stroke-width:2px,color:black
+    classDef frontend fill:#B3E5FC,stroke:#0277BD,stroke-width:2px,color:black
+    classDef backend fill:#C8E6C9,stroke:#2E7D32,stroke-width:2px,color:black
+    classDef external fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px,stroke-dasharray: 5 5,color:black
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+    User([Analyst]):::user
+    
+    subgraph Frontend [React Dashboard]
+        UI[UI Controls]:::frontend
+        Map[Map Canvas]:::frontend
+    end
 
-# Step 3: Install the necessary dependencies.
-npm i
+    subgraph Backend [Uniearth Engine]
+        API[FastAPI Gateway]:::backend
+        Fusion[Fusion Core <br/>(Gap-Fill / Pan-Sharp)]:::backend
+        Tiler[TiTiler Server]:::backend
+    end
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+    subgraph External [Data Sources]
+        MS[Microsoft Planetary Computer]:::external
+        ISRO[ISRO Bhoonidhi]:::external
+    end
+
+    User --> UI
+    UI --> API
+    API --> MS & ISRO
+    MS & ISRO --> Fusion
+    Fusion --> Tiler
+    Tiler --> Map
+    Map --> User
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🚀 Key Features
 
-**Use GitHub Codespaces**
+-   **Multi-Constellation Support**: Seamlessly query Sentinel-2, Landsat, and ISRO catalogues.
+-   **Intelligent Data Fusion**:
+    -   **Cloud Gap Filling**: Automatically replaces cloudy pixels in Sentinel-2 imagery with valid pixels from Landsat timestamps.
+    -   **Pan-Sharpening**: Enhances resolution by merging 10m bands with Multispectral data.
+-   **Live Analysis Dashboard**:
+    -   Interactive map with time-slider controls.
+    -   On-the-fly spectral index calculation (NDVI, NDWI).
+-   **Security**: Integrated authentication for ISRO Bhoonidhi secure access.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
+## 🛠️ Technology Stack
 
-This project is built with:
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Frontend** | React 18, Vite | High-performance UI framework. |
+| **Mapping** | OpenLayers | Advanced map rendering engine with EPSG reprojection support. |
+| **Backend** | FastAPI (Python) | High-speed async web framework. |
+| **Geospatial** | Rasterio, TiTiler | Core libraries for reading and tiling COG (Cloud Optimized GeoTIFF) data. |
+| **Data** | STAC API | SpatioTemporal Asset Catalog standard for querying satellite assets. |
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## ⚙️ Installation & Setup
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+### Prerequisites
+-   Node.js v18+
+-   Python 3.11+
+-   Git
 
-## Can I connect a custom domain to my Lovable project?
+### 1. Clone the Repository
+```bash
+git clone https://github.com/your-org/uniearth.git
+cd uniearth
+```
 
-Yes, you can!
+### 2. Backend Setup
+```bash
+cd backend
+# Create Virtual Environment
+python -m venv venv
+.\venv\Scripts\activate  # Windows
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+# Install Dependencies
+pip install -r requirements.txt
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+# Start Server
+python -m uvicorn main:app --reload
+```
+*Server will start at `http://localhost:8000`*
+
+### 3. Frontend Setup
+```bash
+cd uniearth
+# Install Node Modules
+npm install
+
+# Start Development Server
+npm run dev
+```
+*Dashboard will launch at `http://localhost:5173`*
+
+---
+
+## 📡 API Reference
+
+The backend exposes a Swagger UI at `http://localhost:8000/docs`.
+
+### Core Endpoints
+
+-   `POST /search`: Query for satellite scenes based on BBox and Date.
+-   `POST /fusion/gap-fill`: Trigger cloud removal algorithm on a specific scene.
+-   `GET /health`: Check system status.
+
+---
+
+
+
+**Team CYBER SOULZ** © 2026. Built for the Future of Earth Observation.
