@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { subDays } from "date-fns";
 import { Header } from "@/components/dashboard/Header";
@@ -6,16 +6,23 @@ import { DataSourceSelector } from "@/components/dashboard/DataSourceSelector";
 import { TimeRangeSelector } from "@/components/dashboard/TimeRangeSelector";
 import { FusionControls, getFusionOptions } from "@/components/dashboard/FusionControls";
 import { MapCanvas } from "@/components/dashboard/MapCanvas";
-import { PixelInspector } from "@/components/dashboard/PixelInspector";
+import { RealPixelInspector } from "@/components/dashboard/RealPixelInspector";
+import { CompositeSelector, BandComposite, composites } from "@/components/dashboard/CompositeSelector";
 import { 
   ChevronLeft, 
   ChevronRight,
   Download,
   Share2,
   Bookmark,
-  HelpCircle
+  HelpCircle,
+  Database
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface PixelLocation {
+  lat: number;
+  lon: number;
+}
 
 const initialDataSources = [
   {
@@ -65,6 +72,9 @@ export default function Index() {
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [selectedComposite, setSelectedComposite] = useState<BandComposite>(composites[0]);
+  const [pixelLocation, setPixelLocation] = useState<PixelLocation | null>(null);
+  const [isLoadingPixel, setIsLoadingPixel] = useState(false);
 
   const toggleDataSource = (id: string) => {
     setDataSources(sources =>
@@ -77,6 +87,13 @@ export default function Index() {
       options.map(o => o.id === id ? { ...o, enabled: !o.enabled } : o)
     );
   };
+
+  const handlePixelClick = useCallback((location: PixelLocation) => {
+    setIsLoadingPixel(true);
+    setPixelLocation(location);
+    // Simulate data fetch
+    setTimeout(() => setIsLoadingPixel(false), 300);
+  }, []);
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
@@ -93,6 +110,13 @@ export default function Index() {
             <DataSourceSelector 
               sources={dataSources} 
               onToggle={toggleDataSource} 
+            />
+            
+            <div className="h-px bg-border" />
+            
+            <CompositeSelector
+              selectedComposite={selectedComposite.id}
+              onSelect={setSelectedComposite}
             />
             
             <div className="h-px bg-border" />
@@ -142,6 +166,13 @@ export default function Index() {
                   </span>
                 ))}
               </div>
+              <div className="w-px h-4 bg-border mx-2" />
+              <span className="text-xs font-mono text-muted-foreground">
+                COMPOSITE:
+              </span>
+              <span className="px-2 py-1 rounded text-xs font-mono bg-success/10 text-success">
+                {selectedComposite.name}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <button className="px-3 py-1.5 rounded-lg text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-2">
@@ -161,7 +192,11 @@ export default function Index() {
 
           {/* Map */}
           <div className="flex-1 p-4">
-            <MapCanvas className="w-full h-full" />
+            <MapCanvas 
+              className="w-full h-full" 
+              selectedComposite={selectedComposite}
+              onPixelClick={handlePixelClick}
+            />
           </div>
 
           {/* Bottom status bar */}
@@ -172,6 +207,11 @@ export default function Index() {
               <span>TILES: 24 loaded</span>
               <span>•</span>
               <span>CACHE: 128MB</span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <Database className="w-3 h-3" />
+                Planetary Computer
+              </span>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono">
               <span className="text-muted-foreground">FUSION MODE:</span>
@@ -199,7 +239,10 @@ export default function Index() {
           className="h-full border-l border-border bg-card/30 overflow-hidden flex-shrink-0"
         >
           <div className="w-80 h-full overflow-y-auto p-4 space-y-4">
-            <PixelInspector />
+            <RealPixelInspector 
+              location={pixelLocation}
+              isLoading={isLoadingPixel}
+            />
             
             {/* Quick actions */}
             <div className="bg-card border border-border rounded-xl p-4">
