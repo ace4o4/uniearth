@@ -1,15 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ZoomIn, ZoomOut, Layers, Crosshair, Maximize, Split, Eye, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { cn } from "@/lib/utils";
-import Map from "ol/Map";
-import View from "ol/View";
-import TileLayer from "ol/layer/Tile";
-import XYZ from "ol/source/XYZ";
-import { fromLonLat, toLonLat } from "ol/proj";
-import type { MapBrowserEvent } from "ol";
-import "ol/ol.css";
-import { BandComposite } from "./CompositeSelector";
+import { ZoomIn, ZoomOut, Layers, Crosshair, Maximize, Split, Eye, Loader2, Compass } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { BandComposite } from "@/lib/constants";
+import { api } from "@/lib/api";
 
 interface PixelLocation {
   lat: number;
@@ -20,123 +16,271 @@ interface MapCanvasProps {
   className?: string;
   selectedComposite?: BandComposite;
   onPixelClick?: (location: PixelLocation) => void;
+  dataSources?: any[];
+  flyToLocation?: { lat: number; lon: number; zoom?: number } | null;
+  fusionOptions?: any[]; // Passed from Index
 }
 
-export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCanvasProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<Map | null>(null);
+export function MapCanvas({ className, selectedComposite, onPixelClick, dataSources, flyToLocation, fusionOptions }: MapCanvasProps) {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<maplibregl.Map | null>(null);
   const [coordinates, setCoordinates] = useState({ lat: 20.5937, lon: 78.9629 });
-  const [zoom, setZoom] = useState(5);
+  const [zoom, setZoom] = useState(4);
+  const [pitch, setPitch] = useState(0);
   const [activeLayer, setActiveLayer] = useState<'satellite' | 'terrain' | 'dark'>('satellite');
   const [splitView, setSplitView] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [clickedLocation, setClickedLocation] = useState<PixelLocation | null>(null);
   const [isFetchingData, setIsFetchingData] = useState(false);
+  const [clickedLocation, setClickedLocation] = useState<PixelLocation | null>(null);
   const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected'>('disconnected');
 
+  // Backend Health Check
   useEffect(() => {
     const checkBackend = async () => {
       try {
-        const res = await fetch('http://localhost:8000/health');
-        if (res.ok) setBackendStatus('connected');
-        else setBackendStatus('disconnected');
+        const res = await api.health();
+        setBackendStatus(res.status === 'ok' ? 'connected' : 'disconnected');
       } catch (e) {
         setBackendStatus('disconnected');
       }
     };
-
     checkBackend();
     const interval = setInterval(checkBackend, 30000);
     return () => clearInterval(interval);
   }, []);
 
+  // Initialize Map
   useEffect(() => {
-    if (!mapRef.current || mapInstance.current) return;
+    if (map.current || !mapContainer.current) return;
 
-    const satelliteLayer = new TileLayer({
-      source: new XYZ({
-        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        maxZoom: 19,
-      }),
-      className: 'satellite-layer',
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: {
+        version: 8,
+        sources: {
+          'google-satellite': {
+            type: 'raster',
+            tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
+            tileSize: 256,
+            attribution: '&copy; Google Maps'
+          },
+          'carto-labels': {
+            type: 'raster',
+            tiles: ['https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png'],
+            tileSize: 512,
+            attribution: '&copy; CartoDB',
+            maxzoom: 19
+          },
+          'terrain-source': {
+            type: 'raster-dem',
+            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+            encoding: 'terrarium',
+            tileSize: 256,
+            maxzoom: 15
+          }
+        },
+        layers: [
+          {
+            id: 'satellite-layer',
+            type: 'raster',
+            source: 'google-satellite',
+            paint: {
+              'raster-fade-duration': 0
+            }
+          },
+          {
+            id: 'labels-layer',
+            type: 'raster',
+            source: 'carto-labels',
+            paint: {
+              'raster-fade-duration': 0,
+              'raster-contrast': 0.1 // Slight contrast boost for sharpness
+            }
+          }
+        ],
+        terrain: {
+          source: 'terrain-source',
+          exaggeration: 1.5
+        },
+        sky: {
+           'sky-color': '#87CEEB',
+           'sky-horizon-blend': 0.5,
+           'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 1, 12, 0]
+        }
+      },
+      center: [78.9629, 20.5937],
+      zoom: 4,
+      pitch: 0,
+      maxZoom: 22,
     });
 
-    const map = new Map({
-      target: mapRef.current,
-      layers: [satelliteLayer],
-      view: new View({
-        center: fromLonLat([78.9629, 20.5937]),
-        zoom: 5,
-        maxZoom: 18,
-        minZoom: 3,
-      }),
-      controls: [],
+    map.current.on('load', () => {
+        setIsLoading(false);
     });
 
-    map.on('moveend', () => {
-      const view = map.getView();
-      const center = view.getCenter();
-      if (center) {
-        const lonLat = toLonLat(center);
-        setCoordinates({
-          lat: parseFloat(lonLat[1].toFixed(4)),
-          lon: parseFloat(lonLat[0].toFixed(4))
+    map.current.on('move', () => {
+      if (!map.current) return;
+      const center = map.current.getCenter();
+      setCoordinates({
+        lat: parseFloat(center.lat.toFixed(4)),
+        lon: parseFloat(center.lng.toFixed(4))
+      });
+      setZoom(Math.round(map.current.getZoom()));
+      setPitch(Math.round(map.current.getPitch()));
+    });
+
+    map.current.on('click', (e) => {
+       const { lng, lat } = e.lngLat;
+       const location = { lat, lon: lng };
+       setClickedLocation(location);
+       setIsFetchingData(true);
+       setTimeout(() => {
+         setIsFetchingData(false);
+         onPixelClick?.(location);
+       }, 500);
+    });
+
+  }, []);
+
+  // Update Band Simulation & FUSION EFFECTS (Raster Paint Properties)
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded()) return;
+
+    const layerId = 'satellite-layer';
+    const mode = selectedComposite?.name;
+    
+    // Base Values
+    let saturation = 0;
+    let contrast = 0; 
+    let hueRotate = 0;
+    
+    // 1. Apply Band Composite Logic
+    switch (mode) {
+       case 'Urban':
+         contrast = 0.6; // High contrast
+         saturation = -0.8; // Desaturated (Grayscale-ish)
+         hueRotate = 0;
+         break;
+       case 'Agriculture':
+         saturation = 1.5; // Very vibrant
+         contrast = 0.3;
+         hueRotate = -45; // Shift to Yellow/Bright Green
+         break;
+       case 'False Color (NIR)':
+         saturation = 1.2;
+         contrast = 0.3;
+         hueRotate = -130; // DRASITC SHIFT: Green (120) -> Red (approx -10)
+         break;
+       case 'Moisture Index':
+         hueRotate = 160; // Inverted-ish to highlight water/cool tones
+         saturation = 0.5;
+         contrast = 0.2;
+         break;
+       case 'Geology':
+         hueRotate = 30; // Shift to browns/purples
+         saturation = -0.2; 
+         contrast = 0.4;
+         break;
+       default:
+         saturation = 0.1;
+         contrast = 0.05;
+         break;
+    }
+
+    // 2. Apply FUSION ENGINE Logic (Real-Time Simulation)
+    if (fusionOptions) {
+        const panSharpen = fusionOptions.find((o:any) => o.id === 'pan-sharpen')?.enabled;
+        const cloudFill = fusionOptions.find((o:any) => o.id === 'cloud-filling')?.enabled;
+        const spectral = fusionOptions.find((o:any) => o.id === 'spectral-harmony')?.enabled;
+
+        // Pan-Sharpening: Boost Contrast & Saturation significanly (Sharper look)
+        if (panSharpen) {
+            contrast += 0.5; // Huge contrast boost for sharpness
+            saturation += 0.3;
+        }
+
+        // Cloud Filling: Boost Brightness (Simulate Dehazing)
+        // Note: MapLibre doesn't typically have raster-brightness, but we can simulate with contrast
+        if (cloudFill) {
+            contrast += 0.1;
+            // brightness handled via color shift if possible, or just assume contrast cleans it up
+        }
+
+        // Spectral Harmony: Adjust Hue for Warmth/Balance
+        if (spectral) {
+            hueRotate += 5; // Slight warm shift
+            saturation += 0.1;
+        }
+    }
+
+    // Apply to Map
+    map.current.setPaintProperty(layerId, 'raster-saturation', saturation);
+    map.current.setPaintProperty(layerId, 'raster-contrast', contrast);
+    map.current.setPaintProperty(layerId, 'raster-hue-rotate', hueRotate);
+
+  }, [selectedComposite, fusionOptions]); // Re-run when Fusion Options change
+
+
+  // FlyTo Logic
+  useEffect(() => {
+    if (flyToLocation && map.current) {
+        map.current.flyTo({
+            center: [flyToLocation.lon, flyToLocation.lat],
+            zoom: flyToLocation.zoom || 14,
+            essential: true,
+            pitch: 60, // Auto tilt for cinematic effect
+            speed: 0.8,
+            curve: 1.5
         });
-      }
-      setZoom(Math.round(view.getZoom() || 5));
-    });
+    }
+  }, [flyToLocation]);
 
-    // Handle map clicks for pixel inspection
-    map.on('click', (event) => {
-      const lonLat = toLonLat(event.coordinate);
-      const location = {
-        lat: parseFloat(lonLat[1].toFixed(6)),
-        lon: parseFloat(lonLat[0].toFixed(6)),
-      };
-      setClickedLocation(location);
-      setIsFetchingData(true);
+  const handleZoom = (dir: 'in' | 'out') => {
+      if(dir === 'in') map.current?.zoomIn();
+      else map.current?.zoomOut();
+  };
 
-      // Simulate fetching pixel data
-      setTimeout(() => {
-        setIsFetchingData(false);
-        onPixelClick?.(location);
-      }, 500);
-    });
-
-    map.once('rendercomplete', () => {
-      setIsLoading(false);
-    });
-
-    mapInstance.current = map;
-
-    return () => {
-      map.setTarget(undefined);
-      mapInstance.current = null;
-    };
-  }, [onPixelClick]);
-
-  const handleZoom = (direction: 'in' | 'out') => {
-    if (!mapInstance.current) return;
-    const view = mapInstance.current.getView();
-    const currentZoom = view.getZoom() || 5;
-    view.animate({
-      zoom: direction === 'in' ? currentZoom + 1 : currentZoom - 1,
-      duration: 250,
-    });
+  const handlePitch = () => {
+    if (!map.current) return;
+    const current = map.current.getPitch();
+    map.current.easeTo({ pitch: current > 30 ? 0 : 60 });
   };
 
   const handleCenter = () => {
-    if (!mapInstance.current) return;
-    mapInstance.current.getView().animate({
-      center: fromLonLat([78.9629, 20.5937]),
-      zoom: 5,
-      duration: 500,
+    if (!map.current) return;
+    map.current.flyTo({
+      center: [78.9629, 20.5937],
+      zoom: 4,
+      pitch: 0,
+      essential: true,
+      duration: 1500
     });
+  };
+
+  const handleFullscreen = () => {
+      if (!document.fullscreenElement) {
+          mapContainer.current?.requestFullscreen();
+      } else {
+          document.exitFullscreen();
+      }
   };
 
   return (
     <div className={cn("relative rounded-xl overflow-hidden border border-border", className)}>
-      {/* Loading overlay */}
+      {/* Scanning Overlay */}
+      <AnimatePresence>
+        {isFetchingData && (
+           <motion.div
+             initial={{ top: "-10%" }}
+             animate={{ top: "110%" }}
+             transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+             className="absolute left-0 right-0 h-2 bg-primary/50 blur-sm z-20 pointer-events-none"
+             style={{ boxShadow: '0 0 20px 5px rgba(0, 212, 255, 0.4)' }}
+           />
+        )}
+      </AnimatePresence>
+
+      {/* Loading Overlay */}
       <AnimatePresence>
         {isLoading && (
           <motion.div
@@ -146,168 +290,53 @@ export function MapCanvas({ className, selectedComposite, onPixelClick }: MapCan
           >
             <div className="text-center">
               <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4 mx-auto" />
-              <div className="text-sm font-mono text-muted-foreground">INITIALIZING MAP ENGINE</div>
+              <div className="text-sm font-mono text-muted-foreground">INITIALIZING FUSION ENGINE 3D</div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Map container */}
-      <div
-        ref={mapRef}
-        className="w-full h-full min-h-[500px] cursor-crosshair"
-      />
+      {/* MAP CONTAINER */}
+      <div ref={mapContainer} className="w-full h-full min-h-[500px]" />
 
-      {/* Split view overlay */}
-      {splitView && (
-        <div className="absolute inset-y-0 left-1/2 w-1 bg-primary/50 z-20 cursor-ew-resize">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <Split className="w-4 h-4 text-primary-foreground" />
-          </div>
-        </div>
-      )}
-
-      {/* Clicked location marker overlay */}
-      {clickedLocation && (
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-30"
-        >
-          <div className="relative">
-            <div className="w-6 h-6 rounded-full border-2 border-primary bg-primary/20 animate-pulse" />
-            <div className="absolute inset-0 w-6 h-6 rounded-full border border-primary/50 animate-ping" />
-          </div>
-        </motion.div>
-      )}
-
-      {/* Coordinates display */}
+      {/* Info Panel */}
       <div className="absolute top-4 left-4 z-10">
         <div className="bg-card/90 backdrop-blur-sm rounded-lg px-4 py-2 border border-border">
           <div className="flex items-center gap-4 font-mono text-xs">
-            <div>
-              <span className="text-muted-foreground">LAT: </span>
-              <span className="text-primary">{coordinates.lat.toFixed(4)}°</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">LON: </span>
-              <span className="text-primary">{coordinates.lon.toFixed(4)}°</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">ZOOM: </span>
-              <span className="text-primary">{zoom}</span>
-            </div>
-            {selectedComposite && (
-              <>
-                <div className="w-px h-4 bg-border" />
-                <div>
-                  <span className="text-muted-foreground">MODE: </span>
-                  <span className="text-primary">{selectedComposite.name}</span>
-                </div>
-              </>
-            )}
+            <div><span className="text-muted-foreground">LAT: </span><span className="text-primary">{coordinates.lat.toFixed(4)}°</span></div>
+            <div><span className="text-muted-foreground">LON: </span><span className="text-primary">{coordinates.lon.toFixed(4)}°</span></div>
+            <div><span className="text-muted-foreground">ZOOM: </span><span className="text-primary">{zoom}</span></div>
+            <div><span className="text-muted-foreground">PITCH: </span><span className="text-primary">{pitch}°</span></div>
           </div>
         </div>
       </div>
-
-      {/* Map controls */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleZoom('in')}
-          className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
-        >
-          <ZoomIn className="w-5 h-5" />
-        </motion.button>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleZoom('out')}
-          className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
-        >
-          <ZoomOut className="w-5 h-5" />
-        </motion.button>
-        <div className="h-px bg-border my-1" />
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleCenter}
-          className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
-        >
-          <Crosshair className="w-5 h-5" />
-        </motion.button>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setSplitView(!splitView)}
-          className={cn(
-            "w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border flex items-center justify-center transition-colors",
-            splitView
-              ? "border-primary text-primary"
-              : "border-border text-muted-foreground hover:text-primary hover:border-primary/50"
-          )}
-        >
-          <Split className="w-5 h-5" />
-        </motion.button>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
-        >
-          <Maximize className="w-5 h-5" />
-        </motion.button>
-      </div>
-
-      {/* Layer toggle */}
-      <div className="absolute bottom-4 right-4 z-10">
-        <div className="bg-card/90 backdrop-blur-sm rounded-lg p-1 border border-border flex gap-1">
-          {[
-            { id: 'satellite', icon: <Layers className="w-4 h-4" />, label: 'SAT' },
-            { id: 'terrain', icon: <Layers className="w-4 h-4" />, label: 'TER' },
-            { id: 'dark', icon: <Eye className="w-4 h-4" />, label: 'DRK' },
-          ].map((layer) => (
-            <button
-              key={layer.id}
-              onClick={() => setActiveLayer(layer.id as any)}
-              className={cn(
-                "px-3 py-2 rounded-md text-xs font-mono transition-all flex items-center gap-2",
-                activeLayer === layer.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {layer.icon}
-              {layer.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Processing indicator */}
+      
+      {/* Backend Status Indicator Overlay */}
       <div className="absolute bottom-4 left-4 z-10">
-        <div className="bg-card/90 backdrop-blur-sm rounded-lg px-4 py-2 border border-border">
-          <div className="flex items-center gap-3">
-            {isFetchingData ? (
-              <>
-                <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                <span className="text-xs font-mono text-muted-foreground">
-                  FETCHING PIXEL DATA...
-                </span>
-              </>
-            ) : (
-              <>
-                <div className={`w-2 h-2 rounded-full animate-pulse ${backendStatus === 'connected' ? 'bg-success' : 'bg-destructive'}`} />
-                <span className="text-xs font-mono text-muted-foreground">
-                  FUSION ENGINE: <span className={backendStatus === 'connected' ? 'text-success' : 'text-destructive'}>
-                    {backendStatus === 'connected' ? 'ONLINE' : 'OFFLINE'}
-                  </span>
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+         <div className="bg-card/90 backdrop-blur-sm rounded-lg px-3 py-1 border border-border flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full animate-pulse ${backendStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+            <span className="text-[10px] font-mono text-muted-foreground">
+               FUSION LINK: <span className={backendStatus === 'connected' ? 'text-green-500' : 'text-red-500'}>{backendStatus.toUpperCase()}</span>
+            </span>
+         </div>
       </div>
+
+       {/* Map controls */}
+       <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleZoom('in')} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"><ZoomIn className="w-5 h-5" /></motion.button>
+        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleZoom('out')} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"><ZoomOut className="w-5 h-5" /></motion.button>
+        <div className="h-px bg-border my-1" />
+        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleCenter} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
+            <Crosshair className="w-5 h-5" />
+        </motion.button>
+        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleFullscreen} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
+            <Maximize className="w-5 h-5" />
+        </motion.button>
+        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handlePitch} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
+            <Compass className={cn("w-5 h-5 transition-transform duration-500", pitch > 0 && "text-primary")} style={{ transform: `rotateX(${pitch}deg)` }} />
+        </motion.button>
+       </div>
+
     </div>
   );
 }

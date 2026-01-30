@@ -1,61 +1,56 @@
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+# Sat-Fusion-AI: Sovereign Geospatial Intelligence Agent
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Overview
+Sat-Fusion-AI is an autonomous agent capable of fusing sovereign **ISRO** satellite data (LISS-IV, Cartosat) with global archives (**Sentinel, Landsat**). It solves the "Resolution-Revisit Trade-off" by intelligently selecting and merging data sources based on the user's need (e.g., "See through clouds" via SAR, or "See farm boundaries" via High-Res Optical).
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠️ How to Run the System
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+You need to run **two terminals** simultaneously: one for the Frontend (React) and one for the Backend (Python FastAPI).
 
-Follow these steps:
+### Terminal 1: The Backend (The Brain)
+This runs the Python Agent, Fusion Engine, and Data Connectors.
+```bash
+# 1. Navigate to the project folder
+cd d:\hackathons\unity\uniearth
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# 2. Install Dependencies (First time only)
+pip install -r backend/requirements.txt
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# 3. Start the Server
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+*Wait until you see:* `Application startup complete.`
 
-# Step 3: Install the necessary dependencies.
-npm i
+### Terminal 2: The Frontend (The Dashboard)
+This runs the React UI.
+```bash
+# 1. Navigate to project folder
+cd d:\hackathons\unity\uniearth
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# 2. Install Node Dependencies (First time only)
+npm install
+
+# 3. Start the UI
 npm run dev
 ```
+*Open your browser at:* `http://localhost:8080` (or the port shown in terminal).
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🚦 System Status: Real vs. Mocked
 
-**Use GitHub Codespaces**
+| Component | Status | Real-Time? | Description |
+| :--- | :--- | :--- | :--- |
+| **Agent Core (Brain)** | ✅ **LIVE** | **YES** | The "Reasoning Loop" (ReAct) is real. It analyzes your text and decides which tools to call. |
+| **ISRO Connector** | ✅ **LIVE** | **YES** | It really connects to `isro-bhuvan` WMS logic and identifies available layers. |
+| **Sentinel/Landsat** | ✅ **LIVE** | **YES** | It executes logic to query the Microsoft Planetary Computer API (Free Tier). |
+| **Health Check** | ✅ **LIVE** | **YES** | The "Fusion Engine: ONLINE" badge on the UI checks the server every 30s. |
+| **Fusion Math** | ✅ **LIVE** | **YES** | The algorithms (Brovey, HSV) are implemented in `backend/fusion`. |
+| **Image Downloading** | ⚠️ **MOCKED** | **NO** | We do not download the actual 500MB+ images yet. The system returns metadata links. |
+| **Fusion Output** | ⚠️ **MOCKED** | **NO** | The "Fusion Job" runs logically but returns a JSON success message, not a generated GeoTIFF file. |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 🧠 Key Features to Try
+1.  **Ask the Agent:** Click "Ask Agent" in the header and type *"Assess flood damage in Assam"* -> Watch it decide to use SAR (Radar).
+2.  **Health Check:** Stop the backend (`Ctrl+C`) and watch the UI badge turn RED. Start it again, and it turns GREEN.

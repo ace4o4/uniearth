@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Satellite, Bell, Settings, User, LogIn } from "lucide-react";
+import { Satellite, User, LogIn, Brain } from "lucide-react";
 import { StatusIndicator } from "./StatusIndicator";
 import { AuthDialog } from "./AuthDialog";
+import { AgentChatDialog } from "./AgentChatDialog";
+import { NotificationCenter } from "./NotificationCenter";
+import { LocationSearch } from "./LocationSearch";
 
 interface UserData {
   email: string;
@@ -11,9 +14,11 @@ interface UserData {
 
 interface HeaderProps {
   onAuthSuccess?: (user: UserData) => void;
+  onLocationSelect: (lat: number, lon: number, zoom?: number, startRect?: DOMRect, name?: string, geojson?: any, bbox?: string[]) => void;
 }
 
-export function Header({ onAuthSuccess }: HeaderProps) {
+export function Header({ onAuthSuccess, onLocationSelect }: HeaderProps) {
+  const [agentOpen, setAgentOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [user, setUser] = useState<UserData | null>(null);
 
@@ -24,7 +29,7 @@ export function Header({ onAuthSuccess }: HeaderProps) {
 
   return (
     <>
-      <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm px-6 flex items-center justify-between">
+      <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm px-6 flex items-center justify-between relative z-50">
         <div className="flex items-center gap-6">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -35,18 +40,23 @@ export function Header({ onAuthSuccess }: HeaderProps) {
               <Satellite className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="font-semibold text-foreground tracking-tight">MSDF-D</h1>
-              <p className="text-xs text-muted-foreground font-mono">Multi-Satellite Data Fusion</p>
+              <h1 className="font-semibold text-foreground tracking-tight">Sat-Fusion-AI</h1>
+              <p className="text-xs text-muted-foreground font-mono">Autonomous Fusion Agent</p>
             </div>
           </motion.div>
 
           <div className="h-8 w-px bg-border" />
 
+          <LocationSearch 
+            onLocationSelect={onLocationSelect} 
+            className="w-80"
+          />
+
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="flex items-center gap-4"
+            className="flex items-center gap-4 hidden xl:flex"
           >
             <StatusIndicator status="online" label="Sentinel-2" />
             <StatusIndicator status="syncing" label="Landsat-8" />
@@ -59,13 +69,19 @@ export function Header({ onAuthSuccess }: HeaderProps) {
           animate={{ opacity: 1, x: 0 }}
           className="flex items-center gap-2"
         >
-          <button className="w-10 h-10 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors relative">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary" />
+          {/* AGENT BUTTON */}
+          <button 
+            onClick={() => setAgentOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 border border-pink-500/20 mr-2 transition-all"
+          >
+            <Brain className="w-4 h-4" />
+            <span className="text-sm font-medium">Ask Agent</span>
           </button>
-          <button className="w-10 h-10 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-            <Settings className="w-5 h-5" />
-          </button>
+
+          <div className="mr-2">
+            <NotificationCenter />
+          </div>
+          
           <div className="h-8 w-px bg-border mx-2" />
           
           {user ? (
@@ -75,9 +91,6 @@ export function Header({ onAuthSuccess }: HeaderProps) {
               </div>
               <div className="text-left">
                 <div className="text-sm font-medium">{user.name}</div>
-                <div className="text-xs text-muted-foreground font-mono truncate max-w-[120px]">
-                  {user.email}
-                </div>
               </div>
             </button>
           ) : (
@@ -98,6 +111,11 @@ export function Header({ onAuthSuccess }: HeaderProps) {
         open={authDialogOpen} 
         onOpenChange={setAuthDialogOpen}
         onSuccess={handleAuthSuccess}
+      />
+
+      <AgentChatDialog 
+        open={agentOpen}
+        onOpenChange={setAgentOpen}
       />
     </>
   );

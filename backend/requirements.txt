@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pystac-client
+planetary-computer
+requests
+numpy
+python-multipart
+# For future agentic capabilities
+structlog
+google-genai
+tenacity
+python-dotenv
