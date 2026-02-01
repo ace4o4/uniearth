@@ -102,6 +102,7 @@ export default function Index() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLogPoppedOut, setIsLogPoppedOut] = useState(false);
   const [flyToLocation, setFlyToLocation] = useState<{lat: number, lon: number, zoom?: number, geojson?: any} | null>(null);
+  const [searchResults, setSearchResults] = useState<any[]>([]); // Store STAC items
   
   // Flight Animation State
   const [flightParams, setFlightParams] = useState<{
@@ -277,7 +278,7 @@ export default function Index() {
                     parsedBbox = geojson.bbox;
                 }
 
-                // Show Info Card
+                 // Show Info Card
                 setActiveLocationInfo({
                    name: name || "Unknown",
                    lat,
@@ -286,6 +287,43 @@ export default function Index() {
                 });
 
              }, 3000);
+
+             // 4. TRIGGER REAL STAC SEARCH (Phase 2B Integration)
+             // Parse bbox: Nominatim gives [minLat, maxLat, minLon, maxLon] strings
+             // STAC needs: [minLon, minLat, maxLon, maxLat] floats
+             let searchBbox: number[] = [];
+             if (bbox && bbox.length === 4) {
+                 const b = bbox.map(parseFloat);
+                 // Swap: [lat1, lat2, lon1, lon2] -> [lon1, lat1, lon2, lat2]
+                 searchBbox = [b[2], b[0], b[3], b[1]]; 
+             } else {
+                 searchBbox = [lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1];
+             }
+
+             // Trigger Search
+             api.search("sentinel-2", searchBbox, "2024-01-01", new Date().toISOString().split('T')[0])
+                .then(res => {
+                     if (res.results && res.results.length > 0) {
+                         const count = res.results.length;
+                         // Delayed log to appear after landing
+                         setTimeout(() => {
+                            setSearchResults(res.results); // Visualize on Map
+                            addLog(`SCAN COMPLETE: FOUND ${count} LIVE SCENES`, "success");
+                            toast({ 
+                                title: "Data Found", 
+                                description: `${count} Sentinel-2/Landsat scenes found locally.` 
+                            });
+                         }, 3200);
+                     } else {
+                         setTimeout(() => {
+                           setSearchResults([]); // Clear old results
+                           addLog("SCAN COMPLETE: NO RECENT PASSES FOUND", "info");
+                         }, 3200);
+                     }
+                })
+                .catch(err => {
+                    setTimeout(() => addLog("SCAN ERROR: CONNECTION FAILED", "error"), 3200);
+                });
            } else {
               // Direct Fly (no animation)
               let parsedBbox: number[] | undefined = undefined;
@@ -421,6 +459,7 @@ export default function Index() {
                   dataSources={dataSources}
                   flyToLocation={flyToLocation}
                   fusionOptions={fusionOptions}
+                  searchResults={searchResults}
                 />
 
                 {/* Float Controls */}

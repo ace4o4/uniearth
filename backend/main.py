@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response
+import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -216,24 +217,108 @@ async def analyze_spectral(request: SpectralRequest):
 @app.post("/search")
 async def search_satellite_data(request: SearchRequest):
     """
-    Agentic Search Endpoint.
+    Real-Time STAC Search Endpoint.
+    Queries Earth Search (AWS) for Sentinel-2 and Landsat data.
     """
-    if request.source_id not in connectors:
-        # Agentic Fallback: If source not found, try to reason or default?
-        # For now, strict error.
-        raise HTTPException(status_code=400, detail=f"Source {request.source_id} not supported. Available: {list(connectors.keys())}")
+    from pystac_client import Client
+    
+    STAC_API_URL = "https://earth-search.aws.element84.com/v1"
+    
+    print(f"Searching STAC: {request.bbox} | {request.start_date} to {request.end_date}")
+
+    try:
+        # Convert bbox dict/object to list [minx, miny, maxx, maxy] if not already
+        # Assuming request.bbox is [min_lon, min_lat, max_lon, max_lat]
+        bbox = request.bbox
         
-    connector = connectors[request.source_id]
+        # Connect to STAC API
+        client = Client.open(STAC_API_URL)
+        
+        # Determine collections based on source_id or search everything
+        collections = []
+        if "sentinel" in request.source_id.lower():
+            collections.append("sentinel-2-l2a")
+        elif "landsat" in request.source_id.lower():
+            collections.append("landsat-c2-l2")
+        else:
+            collections = ["sentinel-2-l2a", "landsat-c2-l2"] # Default to both
+            
+        # Parse Dates
+        # Pystac expects "start_iso/end_iso"
+        # We need to ensure YYYY-MM-DD format mostly works or ISO string
+        datetime_range = f"{request.start_date}/{request.end_date}".replace('Z', '')
+
+        search = client.search(
+            collections=collections,
+            bbox=bbox,
+            datetime=datetime_range,
+            max_items=50,
+            query={"eo:cloud_cover": {"lt": 50}} # Default < 50% cloud cover to find something
+        )
+        
+        items = list(search.items())
+        print(f"Docs Found: {len(items)}")
+        
+        results = []
+        for item in items:
+            props = item.properties
+            
+            # Extract Thumbnail (Visual Proof)
+            thumbnail = ""
+            if "thumbnail" in item.assets:
+                thumbnail = item.assets["thumbnail"].href
+            elif "visual" in item.assets: # Sentinel-2 often uses 'visual'
+                thumbnail = item.assets["visual"].href
+            
+            # Construct Result
+            scene = {
+                "id": item.id,
+                "date": item.datetime.strftime("%Y-%m-%d"),
+                "time": item.datetime.strftime("%H:%M:%S"),
+                "satellite": props.get("platform", "Satellite"),
+                "cloud_cover": props.get("eo:cloud_cover", 0),
+                "thumbnail": thumbnail,
+                "bbox": item.bbox
+            }
+            results.append(scene)
+            
+        return {"count": len(results), "results": results}
+
+    except Exception as e:
+        print(f"STAC Error: {str(e)}")
+        # Graceful Fallback
+        return {"count": 0, "results": [], "error": str(e)}
+
+
+@app.get("/proxy/wms")
+async def proxy_wms(request: Request):
+    """
+    Transparent WMS Proxy.
+    Catches all query parameters (SERVICE, REQUEST, LAYERS, BBOX, etc.) 
+    and forwards them to the ISRO VEDAS server.
+    """
+    vedas_base = "https://vedas.sac.gov.in/drought_monitoring_wms/wms"
+    
+    # Extract all query params from the incoming request
+    params = dict(request.query_params)
     
     try:
-        # Parse dates (Timezone consideration: naïve vs aware)
-        start = datetime.fromisoformat(request.start_date.replace('Z', '+00:00'))
-        end = datetime.fromisoformat(request.end_date.replace('Z', '+00:00'))
-        
-        results = await connector.search(request.bbox, start, end)
-        return {"count": len(results), "results": results}
+        async with httpx.AsyncClient(verify=False) as client: # verify=False for ISRO SSL quirks
+            # Forward the request to VEDAS with the captured parameters
+            resp = await client.get(vedas_base, params=params, timeout=15.0)
+            
+            # debug logging
+            print(f"Proxying: {resp.url} -> Status: {resp.status_code}")
+            
+            if resp.status_code != 200:
+                print(f"Error from VEDAS: {resp.text[:200]}")
+                return Response(content=resp.content, status_code=resp.status_code)
+
+            return Response(content=resp.content, media_type=resp.headers.get("content-type", "image/png"))
+            
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Proxy Exception: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Proxy failed: {str(e)}")
 
 
 if __name__ == "__main__":

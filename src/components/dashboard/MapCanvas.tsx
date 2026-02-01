@@ -19,9 +19,10 @@ interface MapCanvasProps {
   dataSources?: any[];
   flyToLocation?: { lat: number; lon: number; zoom?: number } | null;
   fusionOptions?: any[]; // Passed from Index
+  searchResults?: any[]; // New: STAC items to visualize
 }
 
-export function MapCanvas({ className, selectedComposite, onPixelClick, dataSources, flyToLocation, fusionOptions }: MapCanvasProps) {
+export function MapCanvas({ className, selectedComposite, onPixelClick, dataSources, flyToLocation, fusionOptions, searchResults }: MapCanvasProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [coordinates, setCoordinates] = useState({ lat: 20.5937, lon: 78.9629 });
@@ -64,6 +65,15 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
             tileSize: 256,
             attribution: '&copy; Google Maps'
           },
+          'isro-vedas': {
+            type: 'raster',
+            tiles: [
+                // Call local proxy, passing WMS params directly. MapLibre replaces {bbox-epsg-3857}
+                'http://localhost:8000/proxy/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=cite:india_state&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
+            ],
+            tileSize: 256,
+            attribution: '&copy; VEDAS / SAC / ISRO'
+          },
           'carto-labels': {
             type: 'raster',
             tiles: ['https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png'],
@@ -77,6 +87,10 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
             encoding: 'terrarium',
             tileSize: 256,
             maxzoom: 15
+          },
+          'stac-results': {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
           }
         },
         layers: [
@@ -89,12 +103,43 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
             }
           },
           {
+            id: 'isro-layer',
+            type: 'raster',
+            source: 'isro-vedas',
+            paint: {
+              'raster-opacity': 0, // Hidden by default
+              'raster-fade-duration': 300
+            }
+          },
+
+          {
             id: 'labels-layer',
             type: 'raster',
             source: 'carto-labels',
             paint: {
               'raster-fade-duration': 0,
               'raster-contrast': 0.1 // Slight contrast boost for sharpness
+            }
+          },
+          // STAC Footprints Fill
+          {
+            id: 'stac-fill',
+            type: 'fill',
+            source: 'stac-results',
+            paint: {
+              'fill-color': '#f97316', // Orange-500
+              'fill-opacity': 0.1
+            }
+          },
+          // STAC Footprints Outline
+          {
+            id: 'stac-line',
+            type: 'line',
+            source: 'stac-results',
+            paint: {
+              'line-color': '#f97316',
+              'line-width': 2,
+              'line-dasharray': [2, 1] // Dashed look
             }
           }
         ],
@@ -141,6 +186,26 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
     });
 
   }, []);
+
+  // Update Data Source Visibility
+  useEffect(() => {
+      if (!map.current || !map.current.isStyleLoaded()) return;
+
+      const isroEnabled = dataSources?.find(s => s.id === 'resourcesat-2')?.enabled;
+      
+      // Toggle ISRO Layer Visibility (Hard Switch)
+      if (map.current.getLayer('isro-layer')) {
+          const visibility = isroEnabled ? 'visible' : 'none';
+          map.current.setLayoutProperty('isro-layer', 'visibility', visibility);
+          
+          if (isroEnabled) {
+              // Reset opacity to ensure it's visible if it was faded
+              map.current.setPaintProperty('isro-layer', 'raster-opacity', 1);
+              map.current.triggerRepaint();
+          }
+      }
+
+  }, [dataSources]);
 
   // Update Band Simulation & FUSION EFFECTS (Raster Paint Properties)
   useEffect(() => {
@@ -219,6 +284,41 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
     map.current.setPaintProperty(layerId, 'raster-hue-rotate', hueRotate);
 
   }, [selectedComposite, fusionOptions]); // Re-run when Fusion Options change
+
+  // Update STAC Search Results (Visual Footprints)
+  useEffect(() => {
+    if (!map.current || !map.current.isStyleLoaded() || !searchResults) return;
+
+    if (map.current.getSource('stac-results')) {
+        const source = map.current.getSource('stac-results') as maplibregl.GeoJSONSource;
+        
+        // Convert API results to Generic GeoJSON Features (Polygon from BBox)
+        const features = searchResults.map(scene => ({
+            type: 'Feature',
+            geometry: {
+                type: 'Polygon',
+                coordinates: [[
+                    [scene.bbox[0], scene.bbox[1]], // minLon, minLat
+                    [scene.bbox[2], scene.bbox[1]], // maxLon, minLat
+                    [scene.bbox[2], scene.bbox[3]], // maxLon, maxLat
+                    [scene.bbox[0], scene.bbox[3]], // minLon, maxLat
+                    [scene.bbox[0], scene.bbox[1]]  // Close Loop
+                ]]
+            },
+            properties: {
+                id: scene.id,
+                date: scene.date,
+                satellite: scene.satellite,
+                cloud_cover: scene.cloud_cover
+            }
+        }));
+
+        source.setData({
+            type: 'FeatureCollection',
+            features: features as any
+        });
+    }
+  }, [searchResults]);
 
 
   // FlyTo Logic

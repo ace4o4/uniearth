@@ -18,11 +18,29 @@ export function FlightAnimation({ isActive, startRect, destinationName, onComple
   }, [isActive]);
 
   const handleAnimationComplete = () => {
-    // Text to Speech
-    const utterance = new SpeechSynthesisUtterance(`Destination reached: ${destinationName}`);
-    utterance.rate = 1.1;
-    utterance.pitch = 1.0;
-    window.speechSynthesis.speak(utterance);
+    // Robust Text to Speech Logic
+    const speak = () => {
+       if ('speechSynthesis' in window) {
+           window.speechSynthesis.cancel(); // Clear queue to interrupt previous
+           
+           const utterance = new SpeechSynthesisUtterance(`Destination reached: ${destinationName}`);
+           utterance.rate = 1.0;
+           utterance.pitch = 1.0;
+           utterance.volume = 1.0; // Ensure max volume
+           
+           // Force standard voice if possible to avoid silent custom ones
+           const voices = window.speechSynthesis.getVoices();
+           if(voices.length > 0) {
+              const preferred = voices.find(v => v.lang.includes('en') && v.name.includes('Google')) || voices[0];
+              utterance.voice = preferred;
+           }
+           
+           window.speechSynthesis.speak(utterance);
+       }
+    };
+
+    // Small delay ensuring UI is settled
+    setTimeout(speak, 100);
     
     onComplete();
   };
