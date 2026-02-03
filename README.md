@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-Prototype-orange.svg)
 
-**Uniearth** (powered by **Sat-Fusion-AI**) is a next-generation geospatial analysis platform designed to fuse multi-source satellite data into a unified, cloud-free, and analysis-ready stream. It intelligently selects and merges sovereign **ISRO** satellite data (LISS-IV, Cartosat) with global archives (**Sentinel, Landsat**)..
+**Uniearth** (powered by **Sat-Fusion-AI**) is a next-generation geospatial analysis platform designed to fuse multi-source Satellite data into a unified, cloud-free, and analysis-ready stream. It intelligently selects and merges sovereign **ISRO** satellite data (LISS-IV, Cartosat) with global archives (**Sentinel, Landsat**)..
 
 ---
 
