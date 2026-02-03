@@ -8,7 +8,7 @@
 
 ---
 
-## 🚀 Key Features
+## 🚀 Key Features  ##
 
 -   **Multi-Constellation Support**: Seamlessly query Sentinel-2, Landsat, and ISRO catalogues.
 -   **Intelligent Data Fusion**:
