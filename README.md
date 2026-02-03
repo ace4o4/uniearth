@@ -53,7 +53,7 @@ cd backend
 # Install Dependencies (First time only)
 pip install -r requirements.txt
 
-# Start the Server
+# Start the Server.
 python main.py
 ```
 *Server runs at `http://localhost:8000`*
