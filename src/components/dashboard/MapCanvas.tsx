@@ -92,6 +92,15 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
             tileSize: 256,
             maxzoom: 15
           },
+          // Real-Time / High-Res Proxies
+          'esri-world-imagery': {
+            type: 'raster',
+            tiles: [
+              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+            ],
+            tileSize: 256,
+            attribution: '&copy; Esri, Maxar, Earthstar Geographics'
+          },
           // NASA GIBS Real-Time Sources (Using dynamic Yesterday date)
           'nasa-sentinel-2': {
             type: 'raster',
@@ -127,6 +136,13 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           }
         },
         layers: [
+          // 0. Cartosat-3 Proxy (Highest Resolution)
+          {
+            id: 'cartosat-layer',
+            type: 'raster',
+            source: 'esri-world-imagery',
+            paint: { 'raster-opacity': 0 }
+          },
           // 1. NASA Landsat 8/9 Layer (Real-Time)
           {
             id: 'landsat-layer',
@@ -254,6 +270,7 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
       const sentinel2Enabled = dataSources?.find(s => s.id === 'sentinel-2')?.enabled;
       const landsatEnabled = dataSources?.find(s => s.id === 'landsat-8')?.enabled;
       const sentinel1Enabled = dataSources?.find(s => s.id === 'sentinel-1')?.enabled;
+      const cartosatEnabled = dataSources?.find(s => s.id === 'cartosat-3')?.enabled;
 
       // 1. ISRO Layer (Overlay)
       if (map.current.getLayer('isro-layer')) {
@@ -267,12 +284,14 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
       if (sentinel2Enabled) activeSource = 'nasa-sentinel-2';
       if (landsatEnabled) activeSource = 'nasa-landsat';
       if (sentinel1Enabled) activeSource = 'nasa-smap'; // Use SMAP as Sentinel-1 Proxy
+      if (cartosatEnabled) activeSource = 'esri-world-imagery';
 
       // Toggle Opacity for Smooth Transitions
       const layers = [
           { id: 'sentinel-layer', match: 'nasa-sentinel-2' },
           { id: 'landsat-layer', match: 'nasa-landsat' },
           { id: 'smap-layer', match: 'nasa-smap' },
+          { id: 'cartosat-layer', match: 'esri-world-imagery' },
           { id: 'satellite-layer', match: 'google-satellite' }
       ];
 

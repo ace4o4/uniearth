@@ -53,6 +53,17 @@ const initialDataSources = [
     description: 'High revisit frequency ideal for vegetation monitoring.',
   },
   {
+    id: 'sentinel-1',
+    name: 'Sentinel-1 C-SAR',
+    operator: 'ESA / Copernicus',
+    resolution: '10m (Radar)',
+    revisit: '6 days',
+    enabled: false,
+    color: '#6366f1',
+    bestFor: 'Flood / Moisture',
+    description: 'Radar imaging (SAR) for all-weather, day/night monitoring.',
+  },
+  {
     id: 'landsat-8',
     name: 'Landsat-8/9 OLI',
     operator: 'NASA / USGS',
@@ -76,14 +87,14 @@ const initialDataSources = [
   },
   {
     id: 'cartosat-3',
-    name: 'Cartosat-3',
+    name: 'Cartosat-3 (Proxy)',
     operator: 'ISRO / India',
     resolution: '0.25m',
     revisit: '5 days',
     enabled: false,
     color: '#8b5cf6',
     bestFor: 'Infrastructure',
-    description: 'Sub-meter resolution for urban and road mapping.',
+    description: 'Sub-meter resolution for urban and road mapping (Real-Time).',
   },
 ];
 
