@@ -15,9 +15,10 @@ interface UserData {
 interface HeaderProps {
   onAuthSuccess?: (user: UserData) => void;
   onLocationSelect: (lat: number, lon: number, zoom?: number, startRect?: DOMRect, name?: string, geojson?: any, bbox?: string[]) => void;
+  onAgentAction?: (action: any) => void;
 }
 
-export function Header({ onAuthSuccess, onLocationSelect }: HeaderProps) {
+export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: HeaderProps) {
   const [agentOpen, setAgentOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [user, setUser] = useState<UserData | null>(null);

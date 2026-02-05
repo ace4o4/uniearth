@@ -8,6 +8,7 @@ import { ResizableWindow } from "@/components/ui/ResizableWindow";
 interface AgentChatDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAction?: (action: any) => void;
 }
 
 interface Thread {
@@ -17,7 +18,7 @@ interface Thread {
   actions?: any[];
 }
 
-export function AgentChatDialog({ open, onOpenChange }: AgentChatDialogProps) {
+export function AgentChatDialog({ open, onOpenChange, onAction }: AgentChatDialogProps) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [thread, setThread] = useState<Thread[]>([]);
@@ -29,6 +30,20 @@ export function AgentChatDialog({ open, onOpenChange }: AgentChatDialogProps) {
     }
   }, [thread]);
 
+  const speak = (text: string) => {
+      if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel(); // Stop previous
+          const utterance = new SpeechSynthesisUtterance(text);
+          // Try to select a "futuristic" or "native" voice if available
+          const voices = window.speechSynthesis.getVoices();
+          const preferred = voices.find(v => v.name.includes('Google US English') || v.name.includes('Samantha'));
+          if (preferred) utterance.voice = preferred;
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          window.speechSynthesis.speak(utterance);
+      }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || loading) return;
@@ -38,15 +53,31 @@ export function AgentChatDialog({ open, onOpenChange }: AgentChatDialogProps) {
     setLoading(true);
     setThread(prev => [...prev, { role: "user", content: userMsg }]);
 
-    const res = await api.agentReason(userMsg);
-    
-    setLoading(false);
-    setThread(prev => [...prev, { 
-      role: "agent", 
-      content: res.answer, 
-      thoughts: res.thoughts,
-      actions: res.actions 
-    }]);
+    try {
+        const res = await api.agentReason(userMsg);
+        
+        setLoading(false);
+        setThread(prev => [...prev, { 
+          role: "agent", 
+          content: res.answer, 
+          thoughts: res.thoughts,
+          actions: res.actions 
+        }]);
+
+        // 1. Speak Answer
+        speak(res.answer);
+
+        // 2. Execute Actions
+        if (res.actions && res.actions.length > 0 && onAction) {
+            res.actions.forEach((action: any) => {
+                // Small delay to sync with speech
+                setTimeout(() => onAction(action), 1000);
+            });
+        }
+    } catch (e) {
+        setLoading(false);
+        setThread(prev => [...prev, { role: "agent", content: "I lost connection to the mainframe." }]);
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { subDays } from "date-fns";
 import { Header } from "@/components/dashboard/Header";
@@ -98,6 +98,20 @@ export default function Index() {
   const [selectedComposite, setSelectedComposite] = useState<BandComposite>(composites[0]);
   const [pixelLocation, setPixelLocation] = useState<PixelLocation | null>(null);
   const [isLoadingPixel, setIsLoadingPixel] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [user, setUser] = useState<{name: string, email: string} | null>({ name: "Demo User", email: "demo@uniearth.com" });
+  
+  // System Stats Simulation
+  const [sysStats, setSysStats] = useState({ cpu: 23, mem: 45 });
+  useEffect(() => {
+     const interval = setInterval(() => {
+        setSysStats({
+           cpu: Math.floor(Math.random() * (45 - 15) + 15),
+           mem: Math.floor(Math.random() * (80 - 60) + 60)
+        });
+     }, 3000);
+     return () => clearInterval(interval);
+  }, []);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLogPoppedOut, setIsLogPoppedOut] = useState(false);
@@ -143,6 +157,33 @@ export default function Index() {
        });
     }
   };
+
+  // Phase 3: Live Pulse Polling (Real-Time Satellite Feed Simulation)
+  useEffect(() => {
+      const pollInterval = setInterval(() => {
+          fetch('http://localhost:8000/notifications/live')
+             .then(res => res.json())
+             .then(data => {
+                 if (data.has_new && data.event) {
+                     // Play Notification Sound (Optional)
+                     // const audio = new Audio('/ping.mp3'); audio.play().catch(e=>{});
+
+                     // Show Toast
+                     toast({
+                         title: "New Satellite Pass",
+                         description: data.event.message,
+                         duration: 5000,
+                     });
+
+                     // Log to Terminal
+                     addLog(`LIVE FEED: ${data.event.message}`, 'info');
+                 }
+             })
+             .catch(console.error);
+      }, 15000); // Check every 15 seconds
+
+      return () => clearInterval(pollInterval);
+  }, []);
 
   const toggleFusionOption = async (id: string) => {
     // 1. Optimistic Update or Wait? Let's Wait to simulate "Real Time Connection"
@@ -226,122 +267,157 @@ export default function Index() {
 
   const mainRef = useRef(null);
 
-  return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden font-sans selection:bg-primary/20">
-      <FlightAnimation 
-        isActive={flightParams.isActive}
-        startRect={flightParams.startRect}
-        destinationName={flightParams.destinationName}
-        onComplete={() => setFlightParams(prev => ({ ...prev, isActive: false }))}
-      />
+  // ------------------------------------------------------------------
+  // SHARED NAVIGATION LOGIC (Used by Manual Search & AI Agent)
+  // ------------------------------------------------------------------
+  const handleNavigation = useCallback((lat: number, lon: number, zoom?: number, startRect?: DOMRect | null, name?: string, geojson?: any, bbox?: string[]) => {
+       // Prevent double-flight if already flying
+       if (flightParams.isActive) return;
 
-      <Header 
-        // ... previous props
-        onLocationSelect={(lat, lon, zoom, startRect, name, geojson, bbox) => {
-           // Prevent double-flight if already flying
-           if (flightParams.isActive) return;
+       setFlyToLocation({ lat, lon, zoom: zoom || 11, geojson }); // Ensure final zoom is 11 as requested
+       
+       // Flight Triggered
+       if (true) { // Always animate for Agent too (or pass startRect null)
+         // 1. Clear Info Card
+         setActiveLocationInfo(null);
+         
+         // 2. Start Animation
+         setFlightParams({
+           isActive: true,
+           startRect: startRect || null,
+           destinationName: name || "Unknown Location"
+         });
 
-           setFlyToLocation({ lat, lon, zoom: zoom || 11, geojson }); // Ensure final zoom is 11 as requested
-           
-           // Flight Triggered
-           if (startRect) {
-             // 1. Clear Info Card
-             setActiveLocationInfo(null);
-             
-             // 2. Start Animation
-             setFlightParams({
-               isActive: true,
-               startRect,
-               destinationName: name || "Unknown Location"
-             });
+         // 3. Log Flight Initiation
+         addLog(`TARGET LOCKED: ${name?.toUpperCase()}`, 'info');
+         addLog(`INITIATING FLIGHT SEQUENCE TO [${lat.toFixed(3)}, ${lon.toFixed(3)}]`, 'warning');
 
-             // 3. Log Flight Initiation
-             addLog(`TARGET LOCKED: ${name?.toUpperCase()}`, 'info');
-             addLog(`INITIATING FLIGHT SEQUENCE TO [${lat.toFixed(3)}, ${lon.toFixed(3)}]`, 'warning');
+         // 4. Wait for land (3s) to show info
+         setTimeout(() => {
+            // Check if we are still active (handling race conditions)
+            setFlightParams(prev => {
+                if (!prev.isActive) return prev; 
+                return { ...prev, isActive: false }; // Flight done
+            });
 
-             // 4. Wait for land (3s) to show info
-             setTimeout(() => {
-                // Check if we are still active (handling race conditions)
-                setFlightParams(prev => {
-                    if (!prev.isActive) return prev; 
-                    return { ...prev, isActive: false }; // Flight done
-                });
+            addLog(`DESTINATION REACHED: ${name?.toUpperCase()}`, 'success');
+            addLog(`ENGAGING FUSION SENSORS...`, 'info');
+            
+            // Parse bbox if available
+            let parsedBbox: number[] | undefined = undefined;
+            if (bbox) {
+                parsedBbox = bbox.map(parseFloat);
+            } else if (geojson?.bbox) {
+                parsedBbox = geojson.bbox;
+            }
 
-                addLog(`DESTINATION REACHED: ${name?.toUpperCase()}`, 'success');
-                addLog(`ENGAGING FUSION SENSORS...`, 'info');
-                
-                // Parse bbox if available
-                let parsedBbox: number[] | undefined = undefined;
-                if (bbox) {
-                    parsedBbox = bbox.map(parseFloat);
-                } else if (geojson?.bbox) {
-                    parsedBbox = geojson.bbox;
-                }
+             // Show Info Card
+            setActiveLocationInfo({
+               name: name || "Unknown",
+               lat,
+               lon,
+               bbox: parsedBbox
+            });
 
-                 // Show Info Card
-                setActiveLocationInfo({
-                   name: name || "Unknown",
-                   lat,
-                   lon,
-                   bbox: parsedBbox
-                });
+         }, 3000);
 
-             }, 3000);
+         // 4. TRIGGER REAL STAC SEARCH (Phase 2B Integration)
+         // Parse bbox: Nominatim gives [minLat, maxLat, minLon, maxLon] strings
+         // STAC needs: [minLon, minLat, maxLon, maxLat] floats
+         let searchBbox: number[] = [];
+         if (bbox && bbox.length === 4) {
+             const b = bbox.map(parseFloat);
+             // Swap: [lat1, lat2, lon1, lon2] -> [lon1, lat1, lon2, lat2]
+             searchBbox = [b[2], b[0], b[3], b[1]]; 
+         } else {
+             searchBbox = [lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1];
+         }
 
-             // 4. TRIGGER REAL STAC SEARCH (Phase 2B Integration)
-             // Parse bbox: Nominatim gives [minLat, maxLat, minLon, maxLon] strings
-             // STAC needs: [minLon, minLat, maxLon, maxLat] floats
-             let searchBbox: number[] = [];
-             if (bbox && bbox.length === 4) {
-                 const b = bbox.map(parseFloat);
-                 // Swap: [lat1, lat2, lon1, lon2] -> [lon1, lat1, lon2, lat2]
-                 searchBbox = [b[2], b[0], b[3], b[1]]; 
-             } else {
-                 searchBbox = [lon - 0.1, lat - 0.1, lon + 0.1, lat + 0.1];
-             }
+         // Trigger Search
+         api.search("sentinel-2", searchBbox, "2024-01-01", new Date().toISOString().split('T')[0])
+            .then(res => {
+                 if (res.results && res.results.length > 0) {
+                     const count = res.results.length;
+                     // Delayed log to appear after landing
+                     setTimeout(() => {
+                        setSearchResults(res.results); // Visualize on Map
+                        addLog(`SCAN COMPLETE: FOUND ${count} LIVE SCENES`, "success");
+                        toast({ 
+                            title: "Data Found", 
+                            description: `${count} Sentinel-2/Landsat scenes found locally.` 
+                        });
+                     }, 3200);
+                 } else {
+                     setTimeout(() => {
+                       setSearchResults([]); // Clear old results
+                       addLog("SCAN COMPLETE: NO RECENT PASSES FOUND", "info");
+                     }, 3200);
+                 }
+            })
+            .catch(err => {
+                setTimeout(() => addLog("SCAN ERROR: CONNECTION FAILED", "error"), 3200);
+            });
+       } 
+  }, [flightParams.isActive, addLog, setFlyToLocation, setActiveLocationInfo, setFlightParams, toast, setSearchResults]);
 
-             // Trigger Search
-             api.search("sentinel-2", searchBbox, "2024-01-01", new Date().toISOString().split('T')[0])
-                .then(res => {
-                     if (res.results && res.results.length > 0) {
-                         const count = res.results.length;
-                         // Delayed log to appear after landing
-                         setTimeout(() => {
-                            setSearchResults(res.results); // Visualize on Map
-                            addLog(`SCAN COMPLETE: FOUND ${count} LIVE SCENES`, "success");
-                            toast({ 
-                                title: "Data Found", 
-                                description: `${count} Sentinel-2/Landsat scenes found locally.` 
-                            });
-                         }, 3200);
-                     } else {
-                         setTimeout(() => {
-                           setSearchResults([]); // Clear old results
-                           addLog("SCAN COMPLETE: NO RECENT PASSES FOUND", "info");
-                         }, 3200);
-                     }
-                })
-                .catch(err => {
-                    setTimeout(() => addLog("SCAN ERROR: CONNECTION FAILED", "error"), 3200);
-                });
-           } else {
-              // Direct Fly (no animation)
-              let parsedBbox: number[] | undefined = undefined;
-              if (bbox) parsedBbox = bbox.map(parseFloat);
+  const handleAgentAction = useCallback(async (action: any) => {
+      const { type, payload } = action;
+      addLog(`AGENT ACTION: ${type.toUpperCase()}`, 'warning');
+
+      // 1. NAVIGATION
+      if (type === 'fly_to') {
+          const locationName = payload.name;
+          addLog(`AGENT NAVIGATING TO: ${locationName}`, 'info');
+          
+          try {
+              // Quick Geocode via Nominatim
+              const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationName)}&format=json&limit=1`);
+              const data = await res.json();
               
-              setActiveLocationInfo({ name: name || "Unknown", lat, lon, bbox: parsedBbox });
-              addLog(`JUMP CUT TO: ${name?.toUpperCase()}`, 'info');
-           }
-        }}
-        onAuthSuccess={(user) => {
-            // setIsAuthOpen(false) handled in Header mostly or passed down.
-            // Actually Header handles state internally for auth dialog, but parent might want to know.
-            addLog(`USER AUTHENTICATED: ${user.name.toUpperCase()}`, 'success');
-        }}
+              if (data && data.length > 0) {
+                  const { lat, lon, boundingbox, display_name } = data[0];
+                  // Nominatim bbox is [minLat, maxLat, minLon, maxLon] strings
+                  handleNavigation(parseFloat(lat), parseFloat(lon), 11, null, locationName, null, boundingbox);
+              } else {
+                  addLog("AGENT ERROR: LOCATION NOT FOUND", 'error');
+                  toast({ title: "Navigation Failed", description: "Could not find coordinates.", variant: "destructive" });
+              }
+          } catch(e) {
+              addLog("AGENT ERROR: GEOCODING FAILED", 'error');
+          }
+      }
+
+      // 2. LAYER SWITCHING
+      if (type === 'set_datasource') {
+           setDataSources(prev => prev.map(s => {
+               if (s.id === payload.id) return { ...s, enabled: true };
+               // Auto-disable conflicting base layers if needed (e.g. if switching to Landsat, disable Sentinel)
+               // For now, keep it simple/additive or manual toggle.
+               return s; 
+           }));
+           addLog(`AGENT ACTIVATED LAYER: ${payload.id.toUpperCase()}`, 'success');
+      }
+
+      // 3. COMPOSITES
+      if (type === 'set_composite') {
+          const comp = composites.find(c => c.id === payload.id);
+          if (comp) {
+              handleCompositeSelect(comp);
+              addLog(`AGENT APPLIED FILTER: ${comp.name.toUpperCase()}`, 'success');
+          }
+      }
+  }, [dataSources, addLog, toast, handleNavigation, handleCompositeSelect]);
+
+  // START RENDER
+  return (
+    <div className="flex h-screen w-full flex-col bg-background text-foreground overflow-hidden font-sans selection:bg-primary/20">
+      <Header 
+        onLocationSelect={handleNavigation}
+        onAgentAction={handleAgentAction}
+        onAuthSuccess={(user) => addLog(`USER AUTHENTICATED: ${user.name.toUpperCase()}`, 'success')}
       />
       
       <main ref={mainRef} className="flex-1 overflow-hidden relative">
-        {/* Location Info Card Overlay */}
         <AnimatePresence>
            {activeLocationInfo && (
               <LocationInfoCard 
@@ -408,46 +484,24 @@ export default function Index() {
                {/* Toolbar */}
               <div className="h-12 border-b border-border bg-card/30 px-4 flex items-center justify-between mb-4 rounded-t-xl">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-muted-foreground">
-                    ACTIVE:
-                  </span>
+                  <span className="text-xs font-mono text-muted-foreground">ACTIVE:</span>
                   <div className="flex gap-1">
                     {dataSources.filter(s => s.enabled).map(source => (
-                      <span
-                        key={source.id}
-                        className="px-2 py-1 rounded text-xs font-mono bg-primary/10 text-primary"
-                      >
+                      <span key={source.id} className="px-2 py-1 rounded text-xs font-mono bg-primary/10 text-primary">
                         {source.name.split(' ')[0]}
                       </span>
                     ))}
                   </div>
                   <div className="w-px h-4 bg-border mx-2" />
-                  <span className="text-xs font-mono text-muted-foreground">
-                    MODE:
-                  </span>
+                  <span className="text-xs font-mono text-muted-foreground">MODE:</span>
                   <span className="px-2 py-1 rounded text-xs font-mono bg-success/10 text-success">
                     {selectedComposite.name}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button 
-                      onClick={() => toast({ title: "Feature Saved", description: "Area of Interest saved to profile." })}
-                      className="px-3 py-1.5 rounded-lg text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-2">
-                    <Bookmark className="w-4 h-4" />
-                    Save AOI
-                  </button>
-                  <button 
-                      onClick={() => toast({ title: "Link Copied", description: "Dashboard link copied to clipboard." })}
-                      className="px-3 py-1.5 rounded-lg text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-2">
-                    <Share2 className="w-4 h-4" />
-                    Share
-                  </button>
-                  <button 
-                      onClick={() => handleQuickAction("Process-Fusion")}
-                      className="px-3 py-1.5 rounded-lg text-xs font-mono bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-2">
-                    <Download className="w-4 h-4" />
-                    Export Fused
-                  </button>
+                  <button onClick={() => toast({ title: "Saved", description: "AOI Saved" })} className="p-2 hover:bg-muted rounded"><Bookmark className="w-4 h-4"/></button>
+                  <button onClick={() => toast({ title: "Shared", description: "Link Copied" })} className="p-2 hover:bg-muted rounded"><Share2 className="w-4 h-4"/></button>
+                  <button onClick={() => handleQuickAction("Process-Fusion")} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs flex gap-2 items-center"><Download className="w-3 h-3"/> Export</button>
                 </div>
               </div>
 
@@ -461,32 +515,19 @@ export default function Index() {
                   fusionOptions={fusionOptions}
                   searchResults={searchResults}
                 />
-
-                {/* Float Controls */}
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-card/80 backdrop-blur-md px-4 py-2 rounded-full border border-border shadow-xl z-10">
-                  <button 
-                    onClick={() => setDateRange(prev => ({ ...prev, start: subDays(prev.start, 1) }))}
-                    className="p-1 hover:bg-primary/20 rounded-full transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <div className="text-xs font-mono font-medium">
-                    {dateRange.end.toLocaleDateString()}
-                  </div>
-                  <button 
-                    onClick={() => setDateRange(prev => ({ ...prev, end: new Date() }))}
-                    className="p-1 hover:bg-primary/20 rounded-full transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+                 {/* Date Controls Overlay */}
+                 <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-card/80 backdrop-blur-md px-4 py-2 rounded-full border border-border">
+                    <button onClick={() => setDateRange(prev => ({ ...prev, start: subDays(prev.start, 1) }))}><ChevronLeft className="w-4 h-4"/></button>
+                    <span className="text-xs font-mono">{dateRange.end.toLocaleDateString()}</span>
+                    <button onClick={() => setDateRange(prev => ({ ...prev, end: new Date() }))}><ChevronRight className="w-4 h-4"/></button>
+                 </div>
               </div>
             </div>
           </ResizablePanel>
 
           <ResizableHandle withHandle />
 
-          {/* RIGHT SIDEBAR */}
+          {/* RIGHT SIDEBAR - REORDERED */}
           <ResizablePanel defaultSize={20} minSize={15} maxSize={35} className="bg-card/30 backdrop-blur-md border-l border-border">
              <div className="h-full flex flex-col p-4 gap-4 overflow-y-auto">
                 <RealPixelInspector 
@@ -494,6 +535,22 @@ export default function Index() {
                   location={pixelLocation}
                 />
                 
+                {/* 1. MOVED UP: SYSTEM LOGS */}
+                {!isLogPoppedOut && (
+                  <div className="flex-1 min-h-[200px] flex flex-col">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Terminal className="w-3 h-3 text-primary" />
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">System Terminal</h3>
+                      </div>
+                      <SystemLog 
+                        logs={logs} 
+                        className="flex-1" 
+                        onPopOut={() => setIsLogPoppedOut(true)}
+                      />
+                  </div>
+                )}
+                
+                {/* 2. Quick Actions */}
                 <div className="space-y-2">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                     <HelpCircle className="w-3 h-3" /> Quick Actions
@@ -511,44 +568,33 @@ export default function Index() {
                   </div>
                 </div>
 
-                {/* System stats */}
-                <div className="bg-muted/30 rounded-lg p-4 border border-border">
+                {/* 3. MOVED DOWN: System Stats (Dynamic) */}
+                <div className="bg-muted/30 rounded-lg p-4 border border-border mt-auto">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <div className="text-xs text-muted-foreground font-mono mb-1">CPU</div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <motion.div 
                           className="h-full bg-success"
-                          initial={{ width: 0 }}
-                          animate={{ width: "23%" }}
+                          animate={{ width: `${sysStats.cpu}%` }}
                           transition={{ duration: 1 }}
                         />
                       </div>
-                      <div className="text-xs font-mono text-success mt-1">23%</div>
+                      <div className="text-xs font-mono text-success mt-1">{sysStats.cpu}%</div>
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground font-mono mb-1">MEM</div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <motion.div 
                           className="h-full bg-primary"
-                          initial={{ width: 0 }}
-                          animate={{ width: "67%" }}
-                          transition={{ duration: 1, delay: 0.2 }}
+                          animate={{ width: `${sysStats.mem}%` }}
+                          transition={{ duration: 1 }}
                         />
                       </div>
-                      <div className="text-xs font-mono text-primary mt-1">67%</div>
+                      <div className="text-xs font-mono text-primary mt-1">{sysStats.mem}%</div>
                     </div>
                   </div>
                 </div>
-
-                {/* DOCKED SYSTEM LOGS (Visible if not popped out) */}
-                {!isLogPoppedOut && (
-                  <SystemLog 
-                    logs={logs} 
-                    className="flex-1 min-h-[150px]" 
-                    onPopOut={() => setIsLogPoppedOut(true)}
-                  />
-                )}
 
              </div>
           </ResizablePanel>

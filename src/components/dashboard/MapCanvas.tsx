@@ -54,6 +54,11 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
 
+    // Get yesterday's date formatted as YYYY-MM-DD to avoid "future" 400 errors
+    const date = new Date();
+    date.setDate(date.getDate() - 1);
+    const yesterday = date.toISOString().split('T')[0];
+
     map.current = new maplibregl.Map({
       container: mapContainer.current,
       style: {
@@ -68,7 +73,6 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           'isro-vedas': {
             type: 'raster',
             tiles: [
-                // Call local proxy, passing WMS params directly. MapLibre replaces {bbox-epsg-3857}
                 'http://localhost:8000/proxy/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=cite:india_state&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
             ],
             tileSize: 256,
@@ -88,18 +92,73 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
             tileSize: 256,
             maxzoom: 15
           },
+          // NASA GIBS Real-Time Sources (Using dynamic Yesterday date)
+          'nasa-sentinel-2': {
+            type: 'raster',
+            tiles: [
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Sentinel2_L2A_SurfaceReflectance_TrueColor/default/${yesterday}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
+            ],
+            tileSize: 256,
+            maxzoom: 13, // GIBS limit
+            attribution: 'NASA GIBS'
+          },
+          'nasa-landsat': {
+            type: 'raster',
+            tiles: [
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Landsat_8_OLI_TIRS_C2_L2_SurfaceReflectance_TrueColor/default/${yesterday}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
+            ],
+            tileSize: 256,
+            maxzoom: 13,
+            attribution: 'NASA GIBS'
+          },
+          'nasa-smap': {
+             type: 'raster',
+             tiles: [
+                // SMAP L4 Soil Moisture (representing non-optical/SAR-like data)
+                `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/SMAP_L4_Surface_Soil_Moisture_9km_12z_Instantaneous/default/${yesterday}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`
+             ],
+             tileSize: 256,
+             maxzoom: 8,
+             attribution: 'NASA SMAP (SAR Fusion)'
+          },
           'stac-results': {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] }
           }
         },
         layers: [
+          // 1. NASA Landsat 8/9 Layer (Real-Time)
+          {
+            id: 'landsat-layer',
+            type: 'raster',
+            source: 'nasa-landsat',
+            paint: { 'raster-opacity': 0 } // Hidden by default
+          },
+          // 2. NASA Sentinel-2 Layer (Real-Time)
+          {
+            id: 'sentinel-layer',
+            type: 'raster',
+            source: 'nasa-sentinel-2',
+            paint: { 'raster-opacity': 0 } // Hidden by default
+          },
+          // 3. NASA SMAP (Sentinel-1 / SAR Proxy)
+          {
+             id: 'smap-layer',
+             type: 'raster',
+             source: 'nasa-smap',
+             paint: { 
+                 'raster-opacity': 0,
+                 'raster-saturation': -0.5 
+             }
+          },
+          // 4. Fallback/Default Google Satellite (High Res)
           {
             id: 'satellite-layer',
             type: 'raster',
-            source: 'google-satellite',
+            source: 'google-satellite', // Default start
             paint: {
-              'raster-fade-duration': 0
+              'raster-fade-duration': 0,
+              'raster-opacity': 1 // Visible by default
             }
           },
           {
@@ -187,24 +246,43 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
 
   }, []);
 
-  // Update Data Source Visibility
+  // Update Data Source Visibility & SWAP MAIN SATELLITE SOURCE
   useEffect(() => {
       if (!map.current || !map.current.isStyleLoaded()) return;
 
       const isroEnabled = dataSources?.find(s => s.id === 'resourcesat-2')?.enabled;
-      
-      // Toggle ISRO Layer Visibility (Hard Switch)
+      const sentinel2Enabled = dataSources?.find(s => s.id === 'sentinel-2')?.enabled;
+      const landsatEnabled = dataSources?.find(s => s.id === 'landsat-8')?.enabled;
+      const sentinel1Enabled = dataSources?.find(s => s.id === 'sentinel-1')?.enabled;
+
+      // 1. ISRO Layer (Overlay)
       if (map.current.getLayer('isro-layer')) {
-          const visibility = isroEnabled ? 'visible' : 'none';
-          map.current.setLayoutProperty('isro-layer', 'visibility', visibility);
-          
-          if (isroEnabled) {
-              // Reset opacity to ensure it's visible if it was faded
-              map.current.setPaintProperty('isro-layer', 'raster-opacity', 1);
-              map.current.triggerRepaint();
-          }
+          map.current.setLayoutProperty('isro-layer', 'visibility', isroEnabled ? 'visible' : 'none');
+          if (isroEnabled) map.current.setPaintProperty('isro-layer', 'raster-opacity', 1);
       }
 
+      // 2. MAIN SATELLITE SOURCE LOGIC (Exclusive Toggle)
+      // Default: Google Satellite
+      let activeSource = 'google-satellite'; 
+      if (sentinel2Enabled) activeSource = 'nasa-sentinel-2';
+      if (landsatEnabled) activeSource = 'nasa-landsat';
+      if (sentinel1Enabled) activeSource = 'nasa-smap'; // Use SMAP as Sentinel-1 Proxy
+
+      // Toggle Opacity for Smooth Transitions
+      const layers = [
+          { id: 'sentinel-layer', match: 'nasa-sentinel-2' },
+          { id: 'landsat-layer', match: 'nasa-landsat' },
+          { id: 'smap-layer', match: 'nasa-smap' },
+          { id: 'satellite-layer', match: 'google-satellite' }
+      ];
+
+      layers.forEach(l => {
+         if (map.current?.getLayer(l.id)) {
+             const targetOpacity = (activeSource === l.match) ? 1 : 0;
+             map.current.setPaintProperty(l.id, 'raster-opacity', targetOpacity);
+         }
+      });
+      
   }, [dataSources]);
 
   // Update Band Simulation & FUSION EFFECTS (Raster Paint Properties)

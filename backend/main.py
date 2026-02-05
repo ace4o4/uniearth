@@ -320,6 +320,111 @@ async def proxy_wms(request: Request):
         print(f"Proxy Exception: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Proxy failed: {str(e)}")
 
+@app.get("/notifications/live")
+async def live_notifications():
+    """
+    Simulates a Real-Time 'RSS Feed' of satellite acquisitions.
+    Frontend polls this to show 'Live' toasts.
+    """
+    import random
+    
+    # 30% chance to have a "new" acquisition in the last few seconds
+    if random.random() > 0.7:
+        cities = ["Mumbai", "Delhi", "Bangalore", "New York", "London", "Tokyo", "Paris", "Berlin", "Sydney", "Dubai"]
+        sats = ["Sentinel-2A", "Sentinel-2B", "Landsat-8", "Landsat-9", "Cartosat-3", "Resourcesat-2"]
+        
+        city = random.choice(cities)
+        sat = random.choice(sats)
+        
+        return {
+            "has_new": True,
+            "event": {
+                "id": str(int(datetime.now().timestamp())),
+                "message": f"{sat} just acquired new data over {city}.",
+                "timestamp": datetime.now().isoformat(),
+                "type": "acquisition"
+            }
+        }
+    
+    return {"has_new": False}
+
+@app.post("/agent/reason")
+async def agent_reason(payload: dict):
+    """
+    Autonomous Agent Brain.
+    Parses natural language queries and returns:
+    1. Answer (Spoken response)
+    2. Thoughts (Step-by-step reasoning)
+    3. Actions (JSON commands for Frontend to execute)
+    """
+    query = payload.get("query", "").lower()
+    
+    response = {
+        "answer": "I'm not sure how to help with that yet.",
+        "thoughts": ["Analyzing query...", "No matching intent found."],
+        "actions": []
+    }
+    
+    # INTENT 1: NAVIGATION (Fly to X)
+    import re
+    loc_match = re.search(r"(go to|fly to|show me|zoom to|find) (.+)", query)
+    if loc_match:
+        location = loc_match.group(2).strip()
+        # Clean up common words
+        for stop in ["in", "at", "the", "map", "location"]:
+            location = location.replace(f" {stop} ", " ")
+            
+        response["thoughts"] = [
+            f"User wants to navigate to '{location}'.",
+            "Extracting location entity...",
+            f"Generating flight command for '{location}'."
+        ]
+        response["answer"] = f"Understood. Initiating orbital transfer to {location}."
+        response["actions"] = [{
+            "type": "fly_to",
+            "payload": {"name": location}
+        }]
+        return response
+
+    # INTENT 2: LAYER SWITCHING (Sentinel, Landsat, ISRO)
+    if "sentinel" in query:
+        response["thoughts"] = ["Detected intent: Switch Data Source", "Target: Sentinel-2 (ESA/Copernicus)", "Generating layer switch command."]
+        response["answer"] = "Switching main feed to Sentinel-2 MSI. Bringing up real-time HLS tiles."
+        response["actions"] = [{"type": "set_datasource", "payload": {"id": "sentinel-2"}}]
+        return response
+    
+    if "landsat" in query:
+        response["thoughts"] = ["Detected intent: Switch Data Source", "Target: Landsat-8/9 (NASA/USGS)", "Generating layer switch command."]
+        response["answer"] = "Activating Landsat-8 OLI feed. Thermal and optical bands syncing."
+        response["actions"] = [{"type": "set_datasource", "payload": {"id": "landsat-8"}}]
+        return response
+
+    if "isro" in query or "resource" in query or "bhuvan" in query:
+        response["thoughts"] = ["Detected intent: Switch Data Source", "Target: ISRO Resourcesat-2", "Generating layer switch command."]
+        response["answer"] = "Connecting to ISRO VEDAS Node. Loading Resourcesat-2 LISS-III coverage."
+        response["actions"] = [{"type": "set_datasource", "payload": {"id": "resourcesat-2"}}]
+        return response
+
+    # INTENT 3: ANALYSIS / COMPOSITES
+    if "vegetation" in query or "crop" in query or "farming" in query or "agriculture" in query:
+        response["thoughts"] = ["Detected intent: Spectral Analysis", "Topic: Vegetation/Agriculture", "Recommended Composite: NDVI / Agriculture (SWIR)", "Applying filter."]
+        response["answer"] = "Analying vegetation health. Switching to Agriculture composite (SWIR-NIR-Blue) to highlight chlorophyll content."
+        response["actions"] = [{"type": "set_composite", "payload": {"id": "agriculture"}}]
+        return response
+        
+    if "water" in query or "flood" in query or "moisture" in query:
+         response["thoughts"] = ["Detected intent: Spectral Analysis", "Topic: Water/Moisture", "Recommended Composite: NDWI / Moisture Index", "Applying filter."]
+         response["answer"] = "Highlighting water bodies and moisture content. Applying Normalized Difference Water Index filter."
+         response["actions"] = [{"type": "set_composite", "payload": {"id": "moisture"}}]
+         return response
+
+    if "urban" in query or "city" in query or "building" in query:
+         response["thoughts"] = ["Detected intent: Spectral Analysis", "Topic: Urbanization", "Recommended Composite: Urban / False Color", "Applying filter."]
+         response["answer"] = "Enhancing man-made structures. Switching to Urban composite."
+         response["actions"] = [{"type": "set_composite", "payload": {"id": "urban"}}]
+         return response
+
+    return response
 
 if __name__ == "__main__":
     import uvicorn
