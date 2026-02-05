@@ -4,17 +4,17 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-Prototype-orange.svg)
 
-**Uniearth** (powered by **Sat-Fusion-AI**) is a next-generation geospatial analysis platform designed to fuse multi-source satellite data into a unified, cloud-free, and analysis-ready stream. It intelligently selects and merges sovereign **ISRO** satellite data (LISS-IV, Cartosat) with global archives (**Sentinel, Landsat**).
+**Uniearth** (powered by **Sat-Fusion-AI**) is a next-generation geospatial analysis platform designed to fuse multi-source Satellite data into a unified, cloud-free, and analysis-ready stream. It intelligently selects and merges sovereign **ISRO** satellite data (LISS-IV, Cartosat) with global archives (**Sentinel, Landsat**)..
 
 ---
 
-## 🚀 Key Features
+## 🚀 Key Features  ##
 
 -   **Multi-Constellation Support**: Seamlessly query Sentinel-2, Landsat, and ISRO catalogues.
 -   **Intelligent Data Fusion**:
     -   **Cloud Gap Filling**: Automatically replaces cloudy pixels.
     -   **Pan-Sharpening**: Enhances resolution by merging bands.
--   **Live Analysis Dashboard**:
+-   **Live Analysis Dashboard___**:
     -   Interactive map with time-slider controls.
     -   On-the-fly spectral index calculation (NDVI, NDWI).
 -   **Sovereign AI Agent**: "Sat-Fusion-AI" agent that autonomously plans data retrieval strategies.
@@ -53,7 +53,7 @@ cd backend
 # Install Dependencies (First time only)
 pip install -r requirements.txt
 
-# Start the Server
+# Start the Server.
 python main.py
 ```
 *Server runs at `http://localhost:8000`*
