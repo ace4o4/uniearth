@@ -143,6 +143,40 @@ export default function Index() {
     bbox?: number[];
   } | null>(null);
 
+  // TIME MACHINE LOGIC: Fetch Data when Date Range Changes
+  useEffect(() => {
+     // Debounce to avoid flooding API while dragging slider
+     const timer = setTimeout(() => {
+         const startStr = dateRange.start.toISOString().split('T')[0];
+         const endStr = dateRange.end.toISOString().split('T')[0];
+         
+         addLog(`TEMPORAL SHIFT INITIATED: ${startStr} to ${endStr}`, 'warning');
+         
+         // Use current view or default India view for search
+         // We can use a rough bbox around the center if no specific location is selected
+         // For Demo: Use a fixed wide bbox or the last known flight location
+         const bbox = [75.0, 18.0, 80.0, 25.0]; // Demo Area (Maharashtra/MP)
+         
+         addLog(`SCANNING ARCHIVES FOR DATE WINDOW...`, 'info');
+         
+         api.search("sentinel-2", bbox, startStr, endStr)
+            .then(res => {
+                if (res.results) {
+                    setSearchResults(res.results);
+                    addLog(`ARCHIVE RETRIEVAL: ${res.results.length} SCENES FOUND`, 'success');
+                    toast({
+                        title: "Time Machine Active",
+                        description: `Found ${res.results.length} scenes in selected window.`,
+                    });
+                }
+            })
+            .catch(() => addLog("ARCHIVE ERROR: CONNECTION FAILED", 'error'));
+
+     }, 1000); // 1s debounce
+
+     return () => clearTimeout(timer);
+  }, [dateRange]);
+
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => [...prev, {
       id: Math.random().toString(36),
@@ -262,6 +296,44 @@ export default function Index() {
               } else {
                   throw new Error(res.message);
               }
+          } else if (action === "Export Fused") {
+               // REAL-TIME EXPORT LOGIC
+               addLog("GENERATING ANALYSIS REPORT...", 'warning');
+               
+               const exportData = {
+                   timestamp: new Date().toISOString(),
+                   session_id: Math.random().toString(36).substring(7),
+                   user: user,
+                   map_view: {
+                       center: { lat: 20.5937, lon: 78.9629 }, // Ideally from mapRef
+                       zoom: 4,
+                       pitch: 0
+                   },
+                   active_layers: dataSources.filter(s => s.enabled).map(s => s.id),
+                   composite_mode: selectedComposite.name,
+                   spectral_bands: selectedComposite.bands,
+                   analysis_window: {
+                       start: dateRange.start,
+                       end: dateRange.end
+                   },
+                   fusion_modules: fusionOptions.filter(o => o.enabled).map(o => o.label),
+                   detected_scenes: searchResults.length,
+                   latest_pixel_inspection: pixelLocation || "None"
+               };
+
+               const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+               const url = URL.createObjectURL(blob);
+               const a = document.createElement('a');
+               a.href = url;
+               a.download = `UniEarth_Analysis_${new Date().getTime()}.json`;
+               document.body.appendChild(a);
+               a.click();
+               document.body.removeChild(a);
+               URL.revokeObjectURL(url);
+
+               addLog("EXPORT COMPLETE: DATA PACKAGE DOWNLOADED", 'success');
+               toast({ title: "Export Successful", description: "Analysis session saved to local drive." });
+
           } else {
                // Simulate others
                addLog(`Allocating resources for ${action}...`, 'info');
@@ -512,7 +584,7 @@ export default function Index() {
                 <div className="flex items-center gap-2">
                   <button onClick={() => toast({ title: "Saved", description: "AOI Saved" })} className="p-2 hover:bg-muted rounded"><Bookmark className="w-4 h-4"/></button>
                   <button onClick={() => toast({ title: "Shared", description: "Link Copied" })} className="p-2 hover:bg-muted rounded"><Share2 className="w-4 h-4"/></button>
-                  <button onClick={() => handleQuickAction("Process-Fusion")} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs flex gap-2 items-center"><Download className="w-3 h-3"/> Export</button>
+                  <button onClick={() => handleQuickAction("Export Fused")} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs flex gap-2 items-center"><Download className="w-3 h-3"/> Export</button>
                 </div>
               </div>
 
@@ -525,6 +597,7 @@ export default function Index() {
                   flyToLocation={flyToLocation}
                   fusionOptions={fusionOptions}
                   searchResults={searchResults}
+                  dateRange={dateRange}
                 />
                  {/* Date Controls Overlay */}
                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-card/80 backdrop-blur-md px-4 py-2 rounded-full border border-border">
@@ -579,33 +652,7 @@ export default function Index() {
                   </div>
                 </div>
 
-                {/* 3. MOVED DOWN: System Stats (Dynamic) */}
-                <div className="bg-muted/30 rounded-lg p-4 border border-border mt-auto">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-xs text-muted-foreground font-mono mb-1">CPU</div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <motion.div 
-                          className="h-full bg-success"
-                          animate={{ width: `${sysStats.cpu}%` }}
-                          transition={{ duration: 1 }}
-                        />
-                      </div>
-                      <div className="text-xs font-mono text-success mt-1">{sysStats.cpu}%</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground font-mono mb-1">MEM</div>
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <motion.div 
-                          className="h-full bg-primary"
-                          animate={{ width: `${sysStats.mem}%` }}
-                          transition={{ duration: 1 }}
-                        />
-                      </div>
-                      <div className="text-xs font-mono text-primary mt-1">{sysStats.mem}%</div>
-                    </div>
-                  </div>
-                </div>
+                {/* 3. MOVED DOWN: System Stats (Dynamic) - REMOVED */}
 
              </div>
           </ResizablePanel>
