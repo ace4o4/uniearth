@@ -39,8 +39,8 @@ export const api = {
       });
       return response.json();
     } catch (error) {
-       console.error("Spectral Analysis Failed:", error);
-       return { bands: [] }; // Fallback
+      console.error("Spectral Analysis Failed:", error);
+      return { bands: [] }; // Fallback
     }
   },
 
@@ -53,8 +53,8 @@ export const api = {
       });
       return response.json();
     } catch (error) {
-       console.error("Fusion Process Failed:", error);
-       return { status: "error", message: "Failed to process fusion action." };
+      console.error("Fusion Process Failed:", error);
+      return { status: "error", message: "Failed to process fusion action." };
     }
   },
 
@@ -86,11 +86,31 @@ export const api = {
       return response.json();
     } catch (error) {
       console.error("Agent Reason Failed:", error);
-      return { 
+      return {
         answer: "I'm having trouble connecting to my reasoning engine (Backend Offline).",
         thoughts: [],
         actions: []
       };
+    }
+  },
+
+  exportMap: async (imageBase64: string, center: { lat: number, lon: number }, zoom: number, activeLayers: string[], userId?: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/export`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image_base64: imageBase64,
+          center,
+          zoom,
+          active_layers: activeLayers,
+          user_id: userId
+        }),
+      });
+      return response.json();
+    } catch (error) {
+      console.error("Export Failed:", error);
+      throw error;
     }
   }
 };

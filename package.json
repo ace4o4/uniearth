@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "deva": "concurrently \"npm run dev\" \"cd backend && python3 main.py\"",
+    "deva": "concurrently \"npm run dev\" \"cd backend && .venv/bin/python3 main.py\"",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

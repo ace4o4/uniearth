@@ -10,3 +10,6 @@ structlog
 google-genai
 tenacity
 python-dotenv
+
+reportlab
+supabase

@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cn } from "@/lib/utils";
-import { ZoomIn, ZoomOut, Layers, Crosshair, Maximize, Split, Eye, Loader2, Compass } from "lucide-react";
+import { ZoomIn, ZoomOut, Layers, Crosshair, Maximize, Split, Eye, Loader2, Compass, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BandComposite } from "@/lib/constants";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 interface PixelLocation {
   lat: number;
@@ -23,7 +25,12 @@ interface MapCanvasProps {
   dateRange?: { start: Date; end: Date }; // New: Time Machine
 }
 
-export function MapCanvas({ className, selectedComposite, onPixelClick, dataSources, flyToLocation, fusionOptions, searchResults, dateRange }: MapCanvasProps) {
+
+export interface MapCanvasHandle {
+  triggerExport: () => void;
+}
+
+export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(({ className, selectedComposite, onPixelClick, dataSources, flyToLocation, fusionOptions, searchResults, dateRange }, ref) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [coordinates, setCoordinates] = useState({ lat: 20.5937, lon: 78.9629 });
@@ -36,6 +43,7 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
   const [isTimeTraveling, setIsTimeTraveling] = useState(false); // Visual Effect State
   const [clickedLocation, setClickedLocation] = useState<PixelLocation | null>(null);
   const [backendStatus, setBackendStatus] = useState<'connected' | 'disconnected'>('disconnected');
+  const [isExporting, setIsExporting] = useState(false);
 
   // Time Machine Visual Effect
   useEffect(() => {
@@ -65,213 +73,233 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
 
   // Initialize Map
   useEffect(() => {
-    if (map.current || !mapContainer.current) return;
+    if (map.current) return; // Prevent double init
+    if (!mapContainer.current) return;
 
     // Get a safe past date (5 days ago) formatted as YYYY-MM-DD to avoid "future" 400 errors from GIBS
     const date = new Date();
     date.setDate(date.getDate() - 5);
     const safeDate = date.toISOString().split('T')[0];
 
-    map.current = new maplibregl.Map({
-      container: mapContainer.current,
-      style: {
-        version: 8,
-        sources: {
-          'google-satellite': {
-            type: 'raster',
-            tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
-            tileSize: 256,
-            attribution: '&copy; Google Maps'
+    try {
+      map.current = new maplibregl.Map({
+        container: mapContainer.current,
+        style: {
+          version: 8,
+          sources: {
+            'google-satellite': {
+              type: 'raster',
+              tiles: ['https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}'],
+              tileSize: 256,
+              attribution: '&copy; Google Maps'
+            },
+            'isro-vedas': {
+              type: 'raster',
+              tiles: [
+                'http://localhost:8000/proxy/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=cite:india_state&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
+              ],
+              tileSize: 256,
+              attribution: '&copy; VEDAS / SAC / ISRO'
+            },
+            'carto-labels': {
+              type: 'raster',
+              tiles: ['https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png'],
+              tileSize: 512,
+              attribution: '&copy; CartoDB',
+              maxzoom: 19
+            },
+            'terrain-source': {
+              type: 'raster-dem',
+              tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+              encoding: 'terrarium',
+              tileSize: 256,
+              maxzoom: 15
+            },
+            // Real-Time / High-Res Proxies
+            'esri-world-imagery': {
+              type: 'raster',
+              tiles: [
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+              ],
+              tileSize: 256,
+              attribution: '&copy; Esri, Maxar, Earthstar Geographics'
+            },
+            // NASA GIBS Real-Time Sources
+            // NOTE: Switched to Esri for Sentinel/Landsat Optical to guarantee "Working" visualization (No Daily Black Gaps)
+            'nasa-sentinel-2': {
+              type: 'raster',
+              tiles: [
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+              ],
+              tileSize: 256,
+              attribution: 'Esri, Sentinel-2 Data'
+            },
+            'nasa-landsat': {
+              type: 'raster',
+              tiles: [
+                `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Landsat_8_OLI_TIRS_C2_L2_SurfaceReflectance_TrueColor/default/${safeDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
+              ],
+              tileSize: 256,
+              attribution: 'Esri, Landsat Data'
+            },
+            // Sentinel-1 Proxy (SAR/Radar)
+            // Uses High-Res Esri Imagery rendered in Grayscale to simulate SAR Amplitude
+            'nasa-smap': {
+              type: 'raster',
+              tiles: [
+                'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+              ],
+              tileSize: 256,
+              attribution: 'Esri, Sentinel-1 Proxy'
+            },
+            'stac-results': {
+              type: 'geojson',
+              data: { type: 'FeatureCollection', features: [] }
+            }
           },
-          'isro-vedas': {
-            type: 'raster',
-            tiles: [
-              'http://localhost:8000/proxy/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=cite:india_state&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
-            ],
-            tileSize: 256,
-            attribution: '&copy; VEDAS / SAC / ISRO'
+          layers: [
+            // 0. Cartosat-3 Proxy (Highest Resolution)
+            {
+              id: 'cartosat-layer',
+              type: 'raster',
+              source: 'esri-world-imagery',
+              paint: { 'raster-opacity': 0 }
+            },
+            // 1. NASA Landsat 8/9 Layer (Real-Time)
+            {
+              id: 'landsat-layer',
+              type: 'raster',
+              source: 'nasa-landsat',
+              paint: { 'raster-opacity': 0 } // Hidden by default
+            },
+            // 2. NASA Sentinel-2 Layer (Real-Time)
+            {
+              id: 'sentinel-layer',
+              type: 'raster',
+              source: 'nasa-sentinel-2',
+              paint: { 'raster-opacity': 0 } // Hidden by default
+            },
+            // 3. NASA SMAP (Sentinel-1 / SAR Proxy)
+            {
+              id: 'smap-layer',
+              type: 'raster',
+              source: 'nasa-smap',
+              paint: {
+                'raster-opacity': 0,
+                'raster-saturation': -0.5
+              }
+            },
+            // 4. Fallback/Default Google Satellite (High Res)
+            {
+              id: 'satellite-layer',
+              type: 'raster',
+              source: 'google-satellite', // Default start
+              paint: {
+                'raster-fade-duration': 0,
+                'raster-opacity': 1 // Visible by default
+              }
+            },
+            {
+              id: 'isro-layer',
+              type: 'raster',
+              source: 'isro-vedas',
+              paint: {
+                'raster-opacity': 0, // Hidden by default
+                'raster-fade-duration': 300
+              }
+            },
+
+            {
+              id: 'labels-layer',
+              type: 'raster',
+              source: 'carto-labels',
+              paint: {
+                'raster-fade-duration': 0,
+                'raster-contrast': 0.1 // Slight contrast boost for sharpness
+              }
+            },
+            // STAC Footprints Fill
+            {
+              id: 'stac-fill',
+              type: 'fill',
+              source: 'stac-results',
+              paint: {
+                'fill-color': '#f97316', // Orange-500
+                'fill-opacity': 0.1
+              }
+            },
+            // STAC Footprints Outline
+            {
+              id: 'stac-line',
+              type: 'line',
+              source: 'stac-results',
+              paint: {
+                'line-color': '#f97316',
+                'line-width': 2,
+                'line-dasharray': [2, 1] // Dashed look
+              }
+            }
+          ],
+          terrain: {
+            source: 'terrain-source',
+            exaggeration: 1.5
           },
-          'carto-labels': {
-            type: 'raster',
-            tiles: ['https://basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png'],
-            tileSize: 512,
-            attribution: '&copy; CartoDB',
-            maxzoom: 19
-          },
-          'terrain-source': {
-            type: 'raster-dem',
-            tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-            encoding: 'terrarium',
-            tileSize: 256,
-            maxzoom: 15
-          },
-          // Real-Time / High-Res Proxies
-          'esri-world-imagery': {
-            type: 'raster',
-            tiles: [
-              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            ],
-            tileSize: 256,
-            attribution: '&copy; Esri, Maxar, Earthstar Geographics'
-          },
-          // NASA GIBS Real-Time Sources
-          // NOTE: Switched to Esri for Sentinel/Landsat Optical to guarantee "Working" visualization (No Daily Black Gaps)
-          'nasa-sentinel-2': {
-            type: 'raster',
-            tiles: [
-              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            ],
-            tileSize: 256,
-            attribution: 'Esri, Sentinel-2 Data'
-          },
-          'nasa-landsat': {
-            type: 'raster',
-            tiles: [
-              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Landsat_8_OLI_TIRS_C2_L2_SurfaceReflectance_TrueColor/default/${safeDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
-            ],
-            tileSize: 256,
-            attribution: 'Esri, Landsat Data'
-          },
-          // Sentinel-1 Proxy (SAR/Radar)
-          // Uses High-Res Esri Imagery rendered in Grayscale to simulate SAR Amplitude
-          'nasa-smap': {
-            type: 'raster',
-            tiles: [
-              'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-            ],
-            tileSize: 256,
-            attribution: 'Esri, Sentinel-1 Proxy'
-          },
-          'stac-results': {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] }
+          sky: {
+            'sky-color': '#87CEEB',
+            'sky-horizon-blend': 0.5,
+            'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 1, 12, 0]
           }
         },
-        layers: [
-          // 0. Cartosat-3 Proxy (Highest Resolution)
-          {
-            id: 'cartosat-layer',
-            type: 'raster',
-            source: 'esri-world-imagery',
-            paint: { 'raster-opacity': 0 }
-          },
-          // 1. NASA Landsat 8/9 Layer (Real-Time)
-          {
-            id: 'landsat-layer',
-            type: 'raster',
-            source: 'nasa-landsat',
-            paint: { 'raster-opacity': 0 } // Hidden by default
-          },
-          // 2. NASA Sentinel-2 Layer (Real-Time)
-          {
-            id: 'sentinel-layer',
-            type: 'raster',
-            source: 'nasa-sentinel-2',
-            paint: { 'raster-opacity': 0 } // Hidden by default
-          },
-          // 3. NASA SMAP (Sentinel-1 / SAR Proxy)
-          {
-            id: 'smap-layer',
-            type: 'raster',
-            source: 'nasa-smap',
-            paint: {
-              'raster-opacity': 0,
-              'raster-saturation': -0.5
-            }
-          },
-          // 4. Fallback/Default Google Satellite (High Res)
-          {
-            id: 'satellite-layer',
-            type: 'raster',
-            source: 'google-satellite', // Default start
-            paint: {
-              'raster-fade-duration': 0,
-              'raster-opacity': 1 // Visible by default
-            }
-          },
-          {
-            id: 'isro-layer',
-            type: 'raster',
-            source: 'isro-vedas',
-            paint: {
-              'raster-opacity': 0, // Hidden by default
-              'raster-fade-duration': 300
-            }
-          },
-
-          {
-            id: 'labels-layer',
-            type: 'raster',
-            source: 'carto-labels',
-            paint: {
-              'raster-fade-duration': 0,
-              'raster-contrast': 0.1 // Slight contrast boost for sharpness
-            }
-          },
-          // STAC Footprints Fill
-          {
-            id: 'stac-fill',
-            type: 'fill',
-            source: 'stac-results',
-            paint: {
-              'fill-color': '#f97316', // Orange-500
-              'fill-opacity': 0.1
-            }
-          },
-          // STAC Footprints Outline
-          {
-            id: 'stac-line',
-            type: 'line',
-            source: 'stac-results',
-            paint: {
-              'line-color': '#f97316',
-              'line-width': 2,
-              'line-dasharray': [2, 1] // Dashed look
-            }
-          }
-        ],
-        terrain: {
-          source: 'terrain-source',
-          exaggeration: 1.5
-        },
-        sky: {
-          'sky-color': '#87CEEB',
-          'sky-horizon-blend': 0.5,
-          'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 1, 12, 0]
-        }
-      },
-      center: [78.9629, 20.5937],
-      zoom: 4,
-      pitch: 0,
-      maxZoom: 22,
-    });
-
-    map.current.on('load', () => {
-      setIsLoading(false);
-    });
-
-    map.current.on('move', () => {
-      if (!map.current) return;
-      const center = map.current.getCenter();
-      setCoordinates({
-        lat: parseFloat(center.lat.toFixed(4)),
-        lon: parseFloat(center.lng.toFixed(4))
+        center: [78.9629, 20.5937],
+        zoom: 4,
+        pitch: 0,
+        maxZoom: 22,
       });
-      setZoom(Math.round(map.current.getZoom()));
-      setPitch(Math.round(map.current.getPitch()));
-    });
 
-    map.current.on('click', (e) => {
-      const { lng, lat } = e.lngLat;
-      const location = { lat, lon: lng };
-      setClickedLocation(location);
-      setIsFetchingData(true);
-      setTimeout(() => {
-        setIsFetchingData(false);
-        onPixelClick?.(location);
-      }, 500);
-    });
+      map.current.on('load', () => {
+        setIsLoading(false);
+      });
 
+      map.current.on('error', (e) => {
+        console.error("Map Error:", e);
+        // Force loading to false on error so spinner goes away
+        setIsLoading(false);
+      });
+
+      map.current.on('move', () => {
+        if (!map.current) return;
+        const center = map.current.getCenter();
+        setCoordinates({
+          lat: parseFloat(center.lat.toFixed(4)),
+          lon: parseFloat(center.lng.toFixed(4))
+        });
+        setZoom(Math.round(map.current.getZoom()));
+        setPitch(Math.round(map.current.getPitch()));
+      });
+
+      map.current.on('click', (e) => {
+        const { lng, lat } = e.lngLat;
+        const location = { lat, lon: lng };
+        setClickedLocation(location);
+        setIsFetchingData(true);
+        setTimeout(() => {
+          setIsFetchingData(false);
+          onPixelClick?.(location);
+        }, 500);
+      });
+
+    } catch (e) {
+      console.error("Failed to initialize map:", e);
+      setIsLoading(false);
+    }
+
+    // Cleanup function to destroy map instance
+    return () => {
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
   }, []);
 
   // Update Data Source Visibility & SWAP MAIN SATELLITE SOURCE
@@ -488,6 +516,70 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
     }
   };
 
+  const handleExport = async () => {
+    if (!map.current) return;
+
+    setIsExporting(true);
+    toast.info("Generating professional report...");
+
+    try {
+      // 1. Capture Map State
+      const center = map.current.getCenter();
+      const currentZoom = map.current.getZoom();
+
+      // 2. Get Active Layers (Logic from source toggle effect)
+      const active: string[] = [];
+      if (map.current.getLayoutProperty('isro-layer', 'visibility') === 'visible') active.push("ISRO Resourcesat-2");
+      if (map.current.getPaintProperty('sentinel-layer', 'raster-opacity') === 1) active.push("Sentinel-2");
+      if (map.current.getPaintProperty('landsat-layer', 'raster-opacity') === 1) active.push("Landsat-8");
+      if (map.current.getPaintProperty('smap-layer', 'raster-opacity') === 1) active.push("Sentinel-1 (SAR)");
+      if (map.current.getPaintProperty('cartosat-layer', 'raster-opacity') === 1) active.push("Cartosat-3");
+      if (active.length === 0) active.push("Google Satellite (Base)");
+
+      // 3. Capture Screenshot
+      // Force a redraw to ensure buffers are ready
+      map.current.triggerRepaint();
+
+      const canvas = map.current.getCanvas();
+      const imageBase64 = canvas.toDataURL('image/png');
+
+      // 4. Get User ID (Optional)
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // 5. Call API
+      const res = await api.exportMap(
+        imageBase64,
+        { lat: center.lat, lon: center.lng },
+        currentZoom,
+        active,
+        user?.id
+      );
+
+      if (res.status === 'success') {
+        toast.success("Export Complete!");
+        // Open PDF in new tab
+        if (res.url && res.url !== '#') {
+          window.open(res.url, '_blank');
+        } else {
+          toast.warning("PDF generated but storage is offline. Check backend logs.");
+        }
+      } else {
+        toast.error("Export failed: " + res.error);
+      }
+
+    } catch (e) {
+      console.error("Export Error:", e);
+      toast.error("Failed to generate report.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Expose methods to parent via ref
+  useImperativeHandle(ref, () => ({
+    triggerExport: handleExport
+  }));
+
   return (
     <div className={cn("relative rounded-xl overflow-hidden border border-border", className)}>
       {/* Scanning Overlay (Data Fetch) */}
@@ -577,8 +669,19 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handlePitch} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
           <Compass className={cn("w-5 h-5 transition-transform duration-500", pitch > 0 && "text-primary")} style={{ transform: `rotateX(${pitch}deg)` }} />
         </motion.button>
+        <div className="h-px bg-border my-1" />
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={handleExport}
+          disabled={isExporting}
+          className="w-10 h-10 rounded-lg bg-primary/90 backdrop-blur-sm border border-border flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Export Professional Report"
+        >
+          {isExporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+        </motion.button>
       </div>
 
     </div>
   );
-}
+});

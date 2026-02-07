@@ -1,12 +1,20 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Satellite, User, LogIn, Brain } from "lucide-react";
+import { Satellite, User, LogIn, Brain, LogOut, Settings } from "lucide-react";
 import { StatusIndicator } from "./StatusIndicator";
 import { AuthDialog } from "./AuthDialog";
 import { AgentChatDialog } from "./AgentChatDialog";
 import { NotificationCenter } from "./NotificationCenter";
 import { LocationSearch } from "./LocationSearch";
 import { supabase } from "@/lib/supabase";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useEffect } from "react";
 
 interface UserData {
@@ -20,9 +28,14 @@ interface HeaderProps {
   onAgentAction?: (action: any) => void;
 }
 
+import { ProfileDialog } from "./ProfileDialog";
+import { SettingsDialog } from "./SettingsDialog"; // Add Import
+
 export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: HeaderProps) {
   const [agentOpen, setAgentOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false); // Add Settings State
   const [user, setUser] = useState<UserData | null>(null);
 
   const handleAuthSuccess = (userData: UserData) => {
@@ -116,14 +129,43 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
           <div className="h-8 w-px bg-border mx-2" />
 
           {user ? (
-            <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors">
-              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                <User className="w-4 h-4 text-primary" />
-              </div>
-              <div className="text-left">
-                <div className="text-sm font-medium">{user.name}</div>
-              </div>
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors outline-none">
+                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <User className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <div className="text-sm font-medium">{user.name}</div>
+                    <div className="text-[10px] text-muted-foreground truncate max-w-[100px]">{user.email}</div>
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer" onClick={() => setProfileOpen(true)}>
+                  <User className="w-4 h-4 mr-2" />
+                  <span>Profile</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer" onClick={() => setSettingsOpen(true)}>
+                  <Settings className="w-4 h-4 mr-2" />
+                  <span>Settings</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer text-red-500 focus:text-red-500"
+                  onClick={async () => {
+                    await supabase.auth.signOut();
+                    setUser(null);
+                    // Auth state listener in useEffect will also handle this, but explicit set is faster UI feedback
+                  }}
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  <span>Sign Out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <motion.button
               onClick={() => setAuthDialogOpen(true)}
@@ -142,6 +184,17 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
         open={authDialogOpen}
         onOpenChange={setAuthDialogOpen}
         onSuccess={handleAuthSuccess}
+      />
+
+      <ProfileDialog
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        user={user}
+      />
+
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
       />
 
       <AgentChatDialog

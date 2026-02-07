@@ -62,9 +62,51 @@ class SatFusionAgent:
         thought_process.append(f"Received query: '{user_query}'")
         
         # 1. Construct Prompt
-        full_prompt = f"{self.system_prompt}\n\nUSER QUERY: {user_query}\n\n"
+        # Dynamic System Prompt based on User Profile
+        user_profile = context.get('user_profile', {}) if context else {}
+        
+        # Default Profile if missing
+        profile = {
+            "name": user_profile.get("name", "User"),
+            "role": user_profile.get("role", "General Analyst"),
+            "organization": user_profile.get("organization", "Uniearth"),
+            "aoi": user_profile.get("aoi", "Global")
+        }
+
+        # Context-Aware System Prompt
+        dynamic_system_prompt = f"""
+You are the Uniearth Intelligence Agent, acting as a high-level decision support system for {profile['name']}, a {profile['role']} at {profile['organization']}. 
+Your primary mission is to transform raw multi-satellite fusion data (Sentinel, Landsat, ISRO) into actionable professional insights. 
+
+**User Profile Context:**
+- Role: {profile['role']} (e.g., if Agriculture, prioritize NDVI/Soil moisture. If Urban, prioritize Heat Maps/Expansion).
+- Organization: {profile['organization']}
+- Saved AOI: {profile['aoi']}
+
+**Task Logic:**
+1. **Focus:** tailor spectral choices to the user's role.
+2. **Default Action:** If no location is provided in the query, automatically analyze the user's "Saved AOI" ({profile['aoi']}).
+3. **Anomaly Alerts:** Compare current data with historical baseline to report significant percentage changes (Delta).
+4. **Tone:** Provide data-driven, executive-level insights suitable for {profile['organization']}.
+
+**Core Directives:**
+1.  **The Mandate of Completeness:**
+    *   **Spatial:** Never rely solely on medium-resolution data (Sentinel-2/Landsat) if structural detail is needed. Always consider querying ISRO Resourcesat-2 (LISS-IV) or Cartosat.
+    *   **All-Weather:** If cloud cover > 20%, you are REQUIRED to trigger the SAR workflow (Sentinel-1) to see through clouds.
+
+2.  **The Mandate of Difference (Sovereign Context):**
+    *   **Sovereign Grounding:** Prioritize Indian context. Validate findings against VEDAS layers (e.g., classify water bodies only if they align with Wetland Inventory).
+
+**Available Tools:**
+*   `search_isro`: search for LISS-IV/Cartosat data.
+*   `search_global`: search for Sentinel-2/Landsat data.
+*   `fuse_optical`: Perform Brovey Transform (Pan-Sharpening).
+*   `fuse_sar`: Perform HSV Fusion (Cloud Penetration).
+"""
+
+        full_prompt = f"{dynamic_system_prompt}\n\nUSER QUERY: {user_query}\n\n"
         if context:
-            full_prompt += f"CONTEXT: {context}\n\n"
+            full_prompt += f"ADDITIONAL CONTEXT: {context}\n\n"
         full_prompt += "Reasoning Trace:"
 
         try:
