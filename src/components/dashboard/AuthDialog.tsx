@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -10,17 +10,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { 
-  Satellite, 
-  Mail, 
-  Lock, 
-  User, 
-  Eye, 
+import {
+  Satellite,
+  Mail,
+  Lock,
+  User,
+  Eye,
   EyeOff,
   Globe,
   Shield
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 interface AuthDialogProps {
   open: boolean;
@@ -41,16 +43,59 @@ export function AuthDialog({ open, onOpenChange, onSuccess }: AuthDialogProps) {
     organization: '',
   });
 
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate authentication
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      if (mode === 'signup') {
+        const { error } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.name,
+              organization: formData.organization,
+            },
+          },
+        });
 
-    setIsLoading(false);
-    onSuccess?.({ email: formData.email, name: formData.name || 'Operator' });
-    onOpenChange(false);
+        if (error) throw error;
+        toast.success('Account created! Please check your email to confirm.');
+        // Optionally close dialog or switch to login, but usually wait for confirmation
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (error) throw error;
+        toast.success('Successfully logged in');
+        onSuccess?.({ email: formData.email, name: formData.name || 'User' }); // Header will update via onAuthStateChange anyway
+        onOpenChange(false);
+      }
+    } catch (error: any) {
+      console.error('Auth error:', error);
+      toast.error(error.message || 'Authentication failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error logging in with Google:', error);
+    }
   };
 
   const handleInputChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,7 +117,7 @@ export function AuthDialog({ open, onOpenChange, onSuccess }: AuthDialogProps) {
                 {mode === 'login' ? 'Welcome Back' : 'Create Account'}
               </DialogTitle>
               <DialogDescription className="text-muted-foreground font-mono text-xs mt-1">
-                {mode === 'login' 
+                {mode === 'login'
                   ? 'Access the Multi-Satellite Fusion Dashboard'
                   : 'Join the Earth Observation Platform'
                 }
@@ -231,23 +276,37 @@ export function AuthDialog({ open, onOpenChange, onSuccess }: AuthDialogProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             <Button
               type="button"
               variant="outline"
-              className="h-11 border-border hover:bg-muted hover:border-primary/30"
+              className="w-full h-11 border-border hover:bg-muted hover:border-primary/30"
+              onClick={handleGoogleLogin}
             >
-              <Shield className="w-4 h-4 mr-2" />
-              <span className="font-mono text-xs">ISRO SSO</span>
+              <svg className="w-4 h-4 mr-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 18 19">
+                <path fillRule="evenodd" d="M8.842 18.083a8.8 8.8 0 0 1-8.65-8.948 8.841 8.841 0 0 1 8.8-8.652h.153a8.464 8.464 0 0 1 5.7 2.257l-2.193 2.038A5.27 5.27 0 0 0 9.09 3.4a5.882 5.882 0 0 0-.2 11.76h.124a5.091 5.091 0 0 0 5.248-4.057L14.3 11H9V8h8.34c.066.543.095 1.09.088 1.636-.086 5.053-3.463 8.449-8.4 8.449l-.186-.002Z" clipRule="evenodd" />
+              </svg>
+              <span className="font-mono text-xs">Google Account</span>
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 border-border hover:bg-muted hover:border-primary/30"
-            >
-              <Globe className="w-4 h-4 mr-2" />
-              <span className="font-mono text-xs">Bhoonidhi</span>
-            </Button>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 border-border hover:bg-muted hover:border-primary/30"
+              >
+                <Shield className="w-4 h-4 mr-2" />
+                <span className="font-mono text-xs">ISRO SSO</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 border-border hover:bg-muted hover:border-primary/30"
+              >
+                <Globe className="w-4 h-4 mr-2" />
+                <span className="font-mono text-xs">Bhoonidhi</span>
+              </Button>
+            </div>
           </div>
 
           {/* Security note */}

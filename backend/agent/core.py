@@ -15,6 +15,8 @@ class SatFusionAgent:
     
     def __init__(self):
         self.api_key = os.getenv("GOOGLE_API_KEY")
+        if self.api_key:
+            self.api_key = self.api_key.strip()
         if not self.api_key:
             print("Warning: GOOGLE_API_KEY not found in environment variables.")
             self.client = None
@@ -24,7 +26,7 @@ class SatFusionAgent:
         self.system_prompt = SYSTEM_PROMPT
         self.tools = TOOLS
         # Switching to stable model
-        self.model_name = "gemini-2.0-flash"
+        self.model_name = "gemini-1.5-flash"
         self.cache = {} # Simple in-memory cache for demo purposes not to be considered real.
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=5, max=20))
@@ -32,12 +34,16 @@ class SatFusionAgent:
         if not self.client:
              raise ValueError("API Key missing")
              
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config={'temperature': 0.2}
-        )
-        return response.text
+        try:
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config={'temperature': 0.2}
+            )
+            return response.text
+        except Exception as e:
+            print(f"LLM Error: {e}")
+            raise e
 
     async def reason_and_act(self, user_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -91,8 +97,10 @@ class SatFusionAgent:
             if not final_answer:
                  final_answer = llm_output # Fallback if parsing fails
 
-        except RetryError:
-            thought_process.append("Info: API Busy (Rate Limit). Switching to Offline Mode.")
+        except RetryError as e:
+            original_error = str(e.last_attempt.exception()) if e.last_attempt else str(e)
+            thought_process.append(f"Info: API Error. Details: {original_error}")
+            thought_process.append("Switching to Offline Mode.")
             # FALLBACK HEURISTIC (The original logic)
             query_lower = user_query.lower()
             if "cloud" in query_lower or "flood" in query_lower or "rain" in query_lower:

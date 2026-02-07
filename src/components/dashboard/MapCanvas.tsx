@@ -54,10 +54,10 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
 
-    // Get yesterday's date formatted as YYYY-MM-DD to avoid "future" 400 errors
+    // Get a safe past date (5 days ago) formatted as YYYY-MM-DD to avoid "future" 400 errors from GIBS
     const date = new Date();
-    date.setDate(date.getDate() - 1);
-    const yesterday = date.toISOString().split('T')[0];
+    date.setDate(date.getDate() - 5);
+    const safeDate = date.toISOString().split('T')[0];
 
     map.current = new maplibregl.Map({
       container: mapContainer.current,
@@ -73,7 +73,7 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           'isro-vedas': {
             type: 'raster',
             tiles: [
-                'http://localhost:8000/proxy/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=cite:india_state&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
+              'http://localhost:8000/proxy/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=cite:india_state&STYLES=&WIDTH=256&HEIGHT=256&SRS=EPSG:3857&BBOX={bbox-epsg-3857}'
             ],
             tileSize: 256,
             attribution: '&copy; VEDAS / SAC / ISRO'
@@ -105,7 +105,7 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           'nasa-sentinel-2': {
             type: 'raster',
             tiles: [
-              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Sentinel2_L2A_SurfaceReflectance_TrueColor/default/${yesterday}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Sentinel2_L2A_SurfaceReflectance_TrueColor/default/${safeDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
             ],
             tileSize: 256,
             maxzoom: 13, // GIBS limit
@@ -114,21 +114,21 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           'nasa-landsat': {
             type: 'raster',
             tiles: [
-              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Landsat_8_OLI_TIRS_C2_L2_SurfaceReflectance_TrueColor/default/${yesterday}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Landsat_8_OLI_TIRS_C2_L2_SurfaceReflectance_TrueColor/default/${safeDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`
             ],
             tileSize: 256,
             maxzoom: 13,
             attribution: 'NASA GIBS'
           },
           'nasa-smap': {
-             type: 'raster',
-             tiles: [
-                // SMAP L4 Soil Moisture (representing non-optical/SAR-like data)
-                `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/SMAP_L4_Surface_Soil_Moisture_9km_12z_Instantaneous/default/${yesterday}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`
-             ],
-             tileSize: 256,
-             maxzoom: 8,
-             attribution: 'NASA SMAP (SAR Fusion)'
+            type: 'raster',
+            tiles: [
+              // SMAP L4 Soil Moisture (representing non-optical/SAR-like data)
+              `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/SMAP_L4_Surface_Soil_Moisture_9km_12z_Instantaneous/default/${safeDate}/GoogleMapsCompatible_Level8/{z}/{y}/{x}.png`
+            ],
+            tileSize: 256,
+            maxzoom: 8,
+            attribution: 'NASA SMAP (SAR Fusion)'
           },
           'stac-results': {
             type: 'geojson',
@@ -159,13 +159,13 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           },
           // 3. NASA SMAP (Sentinel-1 / SAR Proxy)
           {
-             id: 'smap-layer',
-             type: 'raster',
-             source: 'nasa-smap',
-             paint: { 
-                 'raster-opacity': 0,
-                 'raster-saturation': -0.5 
-             }
+            id: 'smap-layer',
+            type: 'raster',
+            source: 'nasa-smap',
+            paint: {
+              'raster-opacity': 0,
+              'raster-saturation': -0.5
+            }
           },
           // 4. Fallback/Default Google Satellite (High Res)
           {
@@ -223,9 +223,9 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           exaggeration: 1.5
         },
         sky: {
-           'sky-color': '#87CEEB',
-           'sky-horizon-blend': 0.5,
-           'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 1, 12, 0]
+          'sky-color': '#87CEEB',
+          'sky-horizon-blend': 0.5,
+          'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 10, 1, 12, 0]
         }
       },
       center: [78.9629, 20.5937],
@@ -235,7 +235,7 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
     });
 
     map.current.on('load', () => {
-        setIsLoading(false);
+      setIsLoading(false);
     });
 
     map.current.on('move', () => {
@@ -250,58 +250,58 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
     });
 
     map.current.on('click', (e) => {
-       const { lng, lat } = e.lngLat;
-       const location = { lat, lon: lng };
-       setClickedLocation(location);
-       setIsFetchingData(true);
-       setTimeout(() => {
-         setIsFetchingData(false);
-         onPixelClick?.(location);
-       }, 500);
+      const { lng, lat } = e.lngLat;
+      const location = { lat, lon: lng };
+      setClickedLocation(location);
+      setIsFetchingData(true);
+      setTimeout(() => {
+        setIsFetchingData(false);
+        onPixelClick?.(location);
+      }, 500);
     });
 
   }, []);
 
   // Update Data Source Visibility & SWAP MAIN SATELLITE SOURCE
   useEffect(() => {
-      if (!map.current || !map.current.isStyleLoaded()) return;
+    if (!map.current || !map.current.isStyleLoaded()) return;
 
-      const isroEnabled = dataSources?.find(s => s.id === 'resourcesat-2')?.enabled;
-      const sentinel2Enabled = dataSources?.find(s => s.id === 'sentinel-2')?.enabled;
-      const landsatEnabled = dataSources?.find(s => s.id === 'landsat-8')?.enabled;
-      const sentinel1Enabled = dataSources?.find(s => s.id === 'sentinel-1')?.enabled;
-      const cartosatEnabled = dataSources?.find(s => s.id === 'cartosat-3')?.enabled;
+    const isroEnabled = dataSources?.find(s => s.id === 'resourcesat-2')?.enabled;
+    const sentinel2Enabled = dataSources?.find(s => s.id === 'sentinel-2')?.enabled;
+    const landsatEnabled = dataSources?.find(s => s.id === 'landsat-8')?.enabled;
+    const sentinel1Enabled = dataSources?.find(s => s.id === 'sentinel-1')?.enabled;
+    const cartosatEnabled = dataSources?.find(s => s.id === 'cartosat-3')?.enabled;
 
-      // 1. ISRO Layer (Overlay)
-      if (map.current.getLayer('isro-layer')) {
-          map.current.setLayoutProperty('isro-layer', 'visibility', isroEnabled ? 'visible' : 'none');
-          if (isroEnabled) map.current.setPaintProperty('isro-layer', 'raster-opacity', 1);
+    // 1. ISRO Layer (Overlay)
+    if (map.current.getLayer('isro-layer')) {
+      map.current.setLayoutProperty('isro-layer', 'visibility', isroEnabled ? 'visible' : 'none');
+      if (isroEnabled) map.current.setPaintProperty('isro-layer', 'raster-opacity', 1);
+    }
+
+    // 2. MAIN SATELLITE SOURCE LOGIC (Exclusive Toggle)
+    // Default: Google Satellite
+    let activeSource = 'google-satellite';
+    if (sentinel2Enabled) activeSource = 'nasa-sentinel-2';
+    if (landsatEnabled) activeSource = 'nasa-landsat';
+    if (sentinel1Enabled) activeSource = 'nasa-smap'; // Use SMAP as Sentinel-1 Proxy
+    if (cartosatEnabled) activeSource = 'esri-world-imagery';
+
+    // Toggle Opacity for Smooth Transitions
+    const layers = [
+      { id: 'sentinel-layer', match: 'nasa-sentinel-2' },
+      { id: 'landsat-layer', match: 'nasa-landsat' },
+      { id: 'smap-layer', match: 'nasa-smap' },
+      { id: 'cartosat-layer', match: 'esri-world-imagery' },
+      { id: 'satellite-layer', match: 'google-satellite' }
+    ];
+
+    layers.forEach(l => {
+      if (map.current?.getLayer(l.id)) {
+        const targetOpacity = (activeSource === l.match) ? 1 : 0;
+        map.current.setPaintProperty(l.id, 'raster-opacity', targetOpacity);
       }
+    });
 
-      // 2. MAIN SATELLITE SOURCE LOGIC (Exclusive Toggle)
-      // Default: Google Satellite
-      let activeSource = 'google-satellite'; 
-      if (sentinel2Enabled) activeSource = 'nasa-sentinel-2';
-      if (landsatEnabled) activeSource = 'nasa-landsat';
-      if (sentinel1Enabled) activeSource = 'nasa-smap'; // Use SMAP as Sentinel-1 Proxy
-      if (cartosatEnabled) activeSource = 'esri-world-imagery';
-
-      // Toggle Opacity for Smooth Transitions
-      const layers = [
-          { id: 'sentinel-layer', match: 'nasa-sentinel-2' },
-          { id: 'landsat-layer', match: 'nasa-landsat' },
-          { id: 'smap-layer', match: 'nasa-smap' },
-          { id: 'cartosat-layer', match: 'esri-world-imagery' },
-          { id: 'satellite-layer', match: 'google-satellite' }
-      ];
-
-      layers.forEach(l => {
-         if (map.current?.getLayer(l.id)) {
-             const targetOpacity = (activeSource === l.match) ? 1 : 0;
-             map.current.setPaintProperty(l.id, 'raster-opacity', targetOpacity);
-         }
-      });
-      
   }, [dataSources]);
 
   // Update Band Simulation & FUSION EFFECTS (Raster Paint Properties)
@@ -310,69 +310,69 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
 
     const layerId = 'satellite-layer';
     const mode = selectedComposite?.name;
-    
+
     // Base Values
     let saturation = 0;
-    let contrast = 0; 
+    let contrast = 0;
     let hueRotate = 0;
-    
+
     // 1. Apply Band Composite Logic
     switch (mode) {
-       case 'Urban':
-         contrast = 0.6; // High contrast
-         saturation = -0.8; // Desaturated (Grayscale-ish)
-         hueRotate = 0;
-         break;
-       case 'Agriculture':
-         saturation = 1.5; // Very vibrant
-         contrast = 0.3;
-         hueRotate = -45; // Shift to Yellow/Bright Green
-         break;
-       case 'False Color (NIR)':
-         saturation = 1.2;
-         contrast = 0.3;
-         hueRotate = -130; // DRASITC SHIFT: Green (120) -> Red (approx -10)
-         break;
-       case 'Moisture Index':
-         hueRotate = 160; // Inverted-ish to highlight water/cool tones
-         saturation = 0.5;
-         contrast = 0.2;
-         break;
-       case 'Geology':
-         hueRotate = 30; // Shift to browns/purples
-         saturation = -0.2; 
-         contrast = 0.4;
-         break;
-       default:
-         saturation = 0.1;
-         contrast = 0.05;
-         break;
+      case 'Urban':
+        contrast = 0.6; // High contrast
+        saturation = -0.8; // Desaturated (Grayscale-ish)
+        hueRotate = 0;
+        break;
+      case 'Agriculture':
+        saturation = 1.5; // Very vibrant
+        contrast = 0.3;
+        hueRotate = -45; // Shift to Yellow/Bright Green
+        break;
+      case 'False Color (NIR)':
+        saturation = 1.2;
+        contrast = 0.3;
+        hueRotate = -130; // DRASITC SHIFT: Green (120) -> Red (approx -10)
+        break;
+      case 'Moisture Index':
+        hueRotate = 160; // Inverted-ish to highlight water/cool tones
+        saturation = 0.5;
+        contrast = 0.2;
+        break;
+      case 'Geology':
+        hueRotate = 30; // Shift to browns/purples
+        saturation = -0.2;
+        contrast = 0.4;
+        break;
+      default:
+        saturation = 0.1;
+        contrast = 0.05;
+        break;
     }
 
     // 2. Apply FUSION ENGINE Logic (Real-Time Simulation)
     if (fusionOptions) {
-        const panSharpen = fusionOptions.find((o:any) => o.id === 'pan-sharpen')?.enabled;
-        const cloudFill = fusionOptions.find((o:any) => o.id === 'cloud-filling')?.enabled;
-        const spectral = fusionOptions.find((o:any) => o.id === 'spectral-harmony')?.enabled;
+      const panSharpen = fusionOptions.find((o: any) => o.id === 'pan-sharpen')?.enabled;
+      const cloudFill = fusionOptions.find((o: any) => o.id === 'cloud-filling')?.enabled;
+      const spectral = fusionOptions.find((o: any) => o.id === 'spectral-harmony')?.enabled;
 
-        // Pan-Sharpening: Boost Contrast & Saturation significanly (Sharper look)
-        if (panSharpen) {
-            contrast += 0.5; // Huge contrast boost for sharpness
-            saturation += 0.3;
-        }
+      // Pan-Sharpening: Boost Contrast & Saturation significanly (Sharper look)
+      if (panSharpen) {
+        contrast += 0.5; // Huge contrast boost for sharpness
+        saturation += 0.3;
+      }
 
-        // Cloud Filling: Boost Brightness (Simulate Dehazing)
-        // Note: MapLibre doesn't typically have raster-brightness, but we can simulate with contrast
-        if (cloudFill) {
-            contrast += 0.1;
-            // brightness handled via color shift if possible, or just assume contrast cleans it up
-        }
+      // Cloud Filling: Boost Brightness (Simulate Dehazing)
+      // Note: MapLibre doesn't typically have raster-brightness, but we can simulate with contrast
+      if (cloudFill) {
+        contrast += 0.1;
+        // brightness handled via color shift if possible, or just assume contrast cleans it up
+      }
 
-        // Spectral Harmony: Adjust Hue for Warmth/Balance
-        if (spectral) {
-            hueRotate += 5; // Slight warm shift
-            saturation += 0.1;
-        }
+      // Spectral Harmony: Adjust Hue for Warmth/Balance
+      if (spectral) {
+        hueRotate += 5; // Slight warm shift
+        saturation += 0.1;
+      }
     }
 
     // Apply to Map
@@ -387,33 +387,33 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
     if (!map.current || !map.current.isStyleLoaded() || !searchResults) return;
 
     if (map.current.getSource('stac-results')) {
-        const source = map.current.getSource('stac-results') as maplibregl.GeoJSONSource;
-        
-        // Convert API results to Generic GeoJSON Features (Polygon from BBox)
-        const features = searchResults.map(scene => ({
-            type: 'Feature',
-            geometry: {
-                type: 'Polygon',
-                coordinates: [[
-                    [scene.bbox[0], scene.bbox[1]], // minLon, minLat
-                    [scene.bbox[2], scene.bbox[1]], // maxLon, minLat
-                    [scene.bbox[2], scene.bbox[3]], // maxLon, maxLat
-                    [scene.bbox[0], scene.bbox[3]], // minLon, maxLat
-                    [scene.bbox[0], scene.bbox[1]]  // Close Loop
-                ]]
-            },
-            properties: {
-                id: scene.id,
-                date: scene.date,
-                satellite: scene.satellite,
-                cloud_cover: scene.cloud_cover
-            }
-        }));
+      const source = map.current.getSource('stac-results') as maplibregl.GeoJSONSource;
 
-        source.setData({
-            type: 'FeatureCollection',
-            features: features as any
-        });
+      // Convert API results to Generic GeoJSON Features (Polygon from BBox)
+      const features = searchResults.map(scene => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[
+            [scene.bbox[0], scene.bbox[1]], // minLon, minLat
+            [scene.bbox[2], scene.bbox[1]], // maxLon, minLat
+            [scene.bbox[2], scene.bbox[3]], // maxLon, maxLat
+            [scene.bbox[0], scene.bbox[3]], // minLon, maxLat
+            [scene.bbox[0], scene.bbox[1]]  // Close Loop
+          ]]
+        },
+        properties: {
+          id: scene.id,
+          date: scene.date,
+          satellite: scene.satellite,
+          cloud_cover: scene.cloud_cover
+        }
+      }));
+
+      source.setData({
+        type: 'FeatureCollection',
+        features: features as any
+      });
     }
   }, [searchResults]);
 
@@ -421,20 +421,20 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
   // FlyTo Logic
   useEffect(() => {
     if (flyToLocation && map.current) {
-        map.current.flyTo({
-            center: [flyToLocation.lon, flyToLocation.lat],
-            zoom: flyToLocation.zoom || 14,
-            essential: true,
-            pitch: 60, // Auto tilt for cinematic effect
-            speed: 0.8,
-            curve: 1.5
-        });
+      map.current.flyTo({
+        center: [flyToLocation.lon, flyToLocation.lat],
+        zoom: flyToLocation.zoom || 14,
+        essential: true,
+        pitch: 60, // Auto tilt for cinematic effect
+        speed: 0.8,
+        curve: 1.5
+      });
     }
   }, [flyToLocation]);
 
   const handleZoom = (dir: 'in' | 'out') => {
-      if(dir === 'in') map.current?.zoomIn();
-      else map.current?.zoomOut();
+    if (dir === 'in') map.current?.zoomIn();
+    else map.current?.zoomOut();
   };
 
   const handlePitch = () => {
@@ -455,11 +455,11 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
   };
 
   const handleFullscreen = () => {
-      if (!document.fullscreenElement) {
-          mapContainer.current?.requestFullscreen();
-      } else {
-          document.exitFullscreen();
-      }
+    if (!document.fullscreenElement) {
+      mapContainer.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
   };
 
   return (
@@ -467,13 +467,13 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
       {/* Scanning Overlay */}
       <AnimatePresence>
         {isFetchingData && (
-           <motion.div
-             initial={{ top: "-10%" }}
-             animate={{ top: "110%" }}
-             transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-             className="absolute left-0 right-0 h-2 bg-primary/50 blur-sm z-20 pointer-events-none"
-             style={{ boxShadow: '0 0 20px 5px rgba(0, 212, 255, 0.4)' }}
-           />
+          <motion.div
+            initial={{ top: "-10%" }}
+            animate={{ top: "110%" }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+            className="absolute left-0 right-0 h-2 bg-primary/50 blur-sm z-20 pointer-events-none"
+            style={{ boxShadow: '0 0 20px 5px rgba(0, 212, 255, 0.4)' }}
+          />
         )}
       </AnimatePresence>
 
@@ -507,32 +507,32 @@ export function MapCanvas({ className, selectedComposite, onPixelClick, dataSour
           </div>
         </div>
       </div>
-      
+
       {/* Backend Status Indicator Overlay */}
       <div className="absolute bottom-4 left-4 z-10">
-         <div className="bg-card/90 backdrop-blur-sm rounded-lg px-3 py-1 border border-border flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full animate-pulse ${backendStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-[10px] font-mono text-muted-foreground">
-               FUSION LINK: <span className={backendStatus === 'connected' ? 'text-green-500' : 'text-red-500'}>{backendStatus.toUpperCase()}</span>
-            </span>
-         </div>
+        <div className="bg-card/90 backdrop-blur-sm rounded-lg px-3 py-1 border border-border flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full animate-pulse ${backendStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className="text-[10px] font-mono text-muted-foreground">
+            FUSION LINK: <span className={backendStatus === 'connected' ? 'text-green-500' : 'text-red-500'}>{backendStatus.toUpperCase()}</span>
+          </span>
+        </div>
       </div>
 
-       {/* Map controls */}
-       <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+      {/* Map controls */}
+      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleZoom('in')} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"><ZoomIn className="w-5 h-5" /></motion.button>
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => handleZoom('out')} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"><ZoomOut className="w-5 h-5" /></motion.button>
         <div className="h-px bg-border my-1" />
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleCenter} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
-            <Crosshair className="w-5 h-5" />
+          <Crosshair className="w-5 h-5" />
         </motion.button>
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleFullscreen} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
-            <Maximize className="w-5 h-5" />
+          <Maximize className="w-5 h-5" />
         </motion.button>
         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handlePitch} className="w-10 h-10 rounded-lg bg-card/90 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-primary transition-colors">
-            <Compass className={cn("w-5 h-5 transition-transform duration-500", pitch > 0 && "text-primary")} style={{ transform: `rotateX(${pitch}deg)` }} />
+          <Compass className={cn("w-5 h-5 transition-transform duration-500", pitch > 0 && "text-primary")} style={{ transform: `rotateX(${pitch}deg)` }} />
         </motion.button>
-       </div>
+      </div>
 
     </div>
   );

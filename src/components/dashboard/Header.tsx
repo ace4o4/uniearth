@@ -6,6 +6,8 @@ import { AuthDialog } from "./AuthDialog";
 import { AgentChatDialog } from "./AgentChatDialog";
 import { NotificationCenter } from "./NotificationCenter";
 import { LocationSearch } from "./LocationSearch";
+import { supabase } from "@/lib/supabase";
+import { useEffect } from "react";
 
 interface UserData {
   email: string;
@@ -28,6 +30,34 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
     onAuthSuccess?.(userData);
   };
 
+  useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          email: session.user.email || '',
+          name: session.user.user_metadata.full_name || session.user.email || 'User'
+        });
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const userData = {
+          email: session.user.email || '',
+          name: session.user.user_metadata.full_name || session.user.email || 'User'
+        };
+        setUser(userData);
+        onAuthSuccess?.(userData);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <>
       <header className="h-16 border-b border-border bg-card/50 backdrop-blur-sm px-6 flex items-center justify-between relative z-50">
@@ -48,8 +78,8 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
 
           <div className="h-8 w-px bg-border" />
 
-          <LocationSearch 
-            onLocationSelect={onLocationSelect} 
+          <LocationSearch
+            onLocationSelect={onLocationSelect}
             className="w-80"
           />
 
@@ -71,7 +101,7 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
           className="flex items-center gap-2"
         >
           {/* AGENT BUTTON */}
-          <button 
+          <button
             onClick={() => setAgentOpen(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 border border-pink-500/20 mr-2 transition-all"
           >
@@ -82,9 +112,9 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
           <div className="mr-2">
             <NotificationCenter />
           </div>
-          
+
           <div className="h-8 w-px bg-border mx-2" />
-          
+
           {user ? (
             <button className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors">
               <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
@@ -95,7 +125,7 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
               </div>
             </button>
           ) : (
-            <motion.button 
+            <motion.button
               onClick={() => setAuthDialogOpen(true)}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -108,13 +138,13 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
         </motion.div>
       </header>
 
-      <AuthDialog 
-        open={authDialogOpen} 
+      <AuthDialog
+        open={authDialogOpen}
         onOpenChange={setAuthDialogOpen}
         onSuccess={handleAuthSuccess}
       />
 
-      <AgentChatDialog 
+      <AgentChatDialog
         open={agentOpen}
         onOpenChange={setAgentOpen}
       />
