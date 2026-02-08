@@ -29,7 +29,7 @@
 
 | Component | Status | Real-Time? | Description |
 | :--- | :--- | :--- | :--- |
-| **Agent Core** | ✅ **LIVE** | **YES** | The "Reasoning Loop" (ReAct) analyzes text and selects tools. |
+| **Agent Core** | ✅ **LIVE** | **YES** | The "Reasoning Loop" (ReAct) analyzes text and selects tools.. |
 | **ISRO Connector** | ✅ **LIVE** | **YES** | Connects to `isro-bhuvan` WMS logic. |
 | **Sentinel/Landsat** | ✅ **LIVE** | **YES** | Queries Microsoft Planetary Computer / STAC APIs. |
 | **Fusion Engine** | ✅ **LIVE** | **YES** | Visual simulation of blur/cloud removal is implemented. |
