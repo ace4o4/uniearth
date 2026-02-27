@@ -13,8 +13,7 @@
 -   **Live Analysis Dashboard___**:
     -   Interactive map with time-slider controls.
     -   On-the-fly spectral index calculation (NDVI, NDWI).
--   **Sovereign AI Agent**: "Sat-Fusion-AI" agent that autonomously plans data retrieval strategies.
-
+-   **Sovereign AI Agent**: "Sat-Fusion-AI" agent that autonomously plans data retrieval strategies
 ## 🚦 System Status: Real vs. Mocked
 
 | Component | Status | Real-Time? | Description |
