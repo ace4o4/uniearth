@@ -1,5 +1,8 @@
 Uniearth: Multi-Satellite Data Fusion Dashboa
 
+
+
+
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg).
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-Prototype-orange.svg)
