@@ -4,6 +4,8 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-Prototype-orange.svg)
 
+
+
 **Uniearth** (powered by *Sat-Fusion-AI**) is a next-generation geospatial analysis platform designed to fuse multi-source Satellite data into a unified, cloud-free, and analysis-ready stream. It intelligently selects and merges sovereign **ISRO** tellite data (LISS-IV, Cartosat)with global archives.
 ## 🚀 Key Features
 -   **Multi-Constellation Support**: Seamlessly query Sentinel-2, Landsat, and ISRO catalogues.
