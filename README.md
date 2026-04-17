@@ -16,6 +16,8 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
 -   **Sovereign AI Agent**: "Sat-Fusion-AI" agent that autonomously plans data retrieval strategies
   # 🚦 System Status: Real vs. Mocked ##
 
+  
+
 | Component | Status | Real-Time? | Description |
 | :--- | :--- | :--- | :--- |
 | **Agent Core** | ✅ **LIVE** | **YES** | The "Reasoning Loop" (ReAct) analyzes text and selects tools.. |
