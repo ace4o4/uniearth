@@ -17,7 +17,7 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
   # 🚦 System Status: Real vs. Mocked ##
 
 
-  
+
 
 | Component | Status | Real-Time? | Description |
 | :--- | :--- | :--- | :--- |
