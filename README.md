@@ -18,6 +18,10 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
 
 
 
+
+
+
+
 | Component | Status | Real-Time? | Description |
 | :--- | :--- | :--- | :--- |
 | **Agent Core** | ✅ **LIVE** | **YES** | The "Reasoning Loop" (ReAct) analyzes text and selects tools.. |
