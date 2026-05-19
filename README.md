@@ -16,7 +16,6 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
   # 🚦 System Status: Real vs. Mocked ##
 
 
-
 | Component | Status | Real-Time? | Description |
 | :--- | :--- | :--- | :--- |
 | **Agent Core** | ✅ **LIVE** | **YES** | The "Reasoning Loop" (ReAct) analyzes text and selects tools.. |
