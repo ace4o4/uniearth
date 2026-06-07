@@ -24,7 +24,6 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
 | **Fusion Engine** | ✅ **LIVE** | **YES** | Visual simulation of blur/cloud removal is implemented. |
 
 
-
 ---
 
 ## 🛠️ Technology Stack
