@@ -23,6 +23,9 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
 | **Sentinel/Landsat** | ✅ **LIVE** | **YES** | Queries Microsoft Planetary Computer / STAC APIs. |
 | **Fusion Engine** | ✅ **LIVE** | **YES** | Visual simulation of blur/cloud removal is implemented. |
 
+
+
+
 ---
 
 ## 🛠️ Technology Stack
