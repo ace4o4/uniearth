@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Satellite, User, LogIn, Brain, LogOut, Settings } from "lucide-react";
+import { Satellite, User, LogIn, Brain, LogOut, Settings, LayoutGrid } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { StatusIndicator } from "./StatusIndicator";
 import { AuthDialog } from "./AuthDialog";
 import { AgentChatDialog } from "./AgentChatDialog";
@@ -37,6 +38,7 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
   const [profileOpen, setProfileOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false); // Add Settings State
   const [user, setUser] = useState<UserData | null>(null);
+  const navigate = useNavigate();
 
   const handleAuthSuccess = (userData: UserData) => {
     setUser(userData);
@@ -113,6 +115,15 @@ export function Header({ onAuthSuccess, onLocationSelect, onAgentAction }: Heade
           animate={{ opacity: 1, x: 0 }}
           className="flex items-center gap-2"
         >
+          {/* PROJECTS HUB BUTTON */}
+          <button
+            onClick={() => navigate("/projects")}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 mr-1 transition-all"
+          >
+            <LayoutGrid className="w-4 h-4" />
+            <span className="text-sm font-medium hidden sm:inline">Projects</span>
+          </button>
+
           {/* AGENT BUTTON */}
           <button
             onClick={() => setAgentOpen(true)}
