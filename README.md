@@ -7,7 +7,7 @@ Uniearth: Multi-Satellite Data Fusion Dashboard
 
 
 esku,
-sd.ckugsD<YJjgczs,d
+sd.ckugsD<YJjgc
 
 
 
